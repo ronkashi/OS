@@ -24,8 +24,8 @@ int main(int argc, char** argv) {
     	for(i=0;i<(strlen(argv[1])-1);i++){
             	if(!(argv[1][i] >= 48 && argv[1][i] <= 57))    
             	{
-		printf("Invalid Data amount (first argument)\n");
-		return -1;
+					printf("Invalid Data amount (first argument)\n");
+					return -1;
             	}
     	}
 	sscanf(argv[1], "%li%c", &size, &unit); //still a problem size can be big
@@ -106,23 +106,34 @@ int main(int argc, char** argv) {
 
 		}
 		else{
-		for (i = 0, numReadable = 0; i < lenRD; i++) {
-			if (bufRD[i] > 31 && bufRD[i] < 127) {	//is printable
-				bufWR[numReadable] = bufRD[i];
-				numReadable++;
+			for (i = 0; i < lenRD; i++) {
+				if (bufRD[i] > 31 && bufRD[i] < 127) {	//is printable
+					bufWR[numReadable] = bufRD[i];
+					numReadable++;
+				}
+				if(numReadable==bufSize-1){
+					lenWR = write(fdOut, bufWR, numReadable);
+					if (lenWR !=numReadable) {
+						printf("Error writing to file: %s\n", strerror(errno));
+						free(bufRD);
+						free(bufWR);
+						return -1;
+					}
+				CPrintable+=numReadable;
+				numReadable=0;
+				}
 			}
 		}
-		for (i = 0; i < numReadable; i += lenWR) {//TODO write with buffer
-			lenWR = write(fdOut, bufWR, numReadable);
-			if (lenRD < 0) {
-				printf("Error writing to file: %s\n", strerror(errno));
-				free(bufRD);
-				free(bufWR);
-				return -1;
-			}
-		}
-CPrintable+=numReadable;
 	}
+	if(numReadable >0){
+		lenWR = write(fdOut, bufWR, numReadable);
+		if (lenWR !=numReadable) {
+			printf("Error writing to file: %s\n", strerror(errno));
+			free(bufRD);
+			free(bufWR);
+			return -1;
+			}
+		CPrintable+=numReadable;
 	}
 	printf("%li characters requested, %li characters read, %li are printable\n",Creq, Cread, CPrintable);
 	close(fdInput); // close file
