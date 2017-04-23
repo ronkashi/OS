@@ -22,6 +22,7 @@
 #define FileNameLength 256
 #define Ksize 1024
 #define BufferSize 4096
+#define _FILE_OFFSET_BITS 64
 
 ///////////////////////////////////////////
 
@@ -82,8 +83,8 @@ typedef struct _Catalog
 
 Command get_command(char* cmd);
 void print_usage();
-RetVals write_catlog_to_file(Catalog ctlg,int fd);
-int read_file_to_catalog(Catalog ctlg,char* repository);
+RetVals write_catlog_to_file(Catalog* ctlg,int fd);
+int read_file_to_catalog(Catalog* ctlg,char* repository);
 int unitToBytes(char unit);
 ssize_t whatIsTheSizeInBytes(char* a);
 char* convert_bytes_to_readable_str(ssize_t bytes);
@@ -171,37 +172,51 @@ void print_usage()
 }
 
 ///////////////////////////////////////////
-RetVals write_catlog_to_file(Catalog ctlg,int fd){
+RetVals write_catlog_to_file(Catalog* ctlg,int fd){
 	int i=0;
 	ssize_t lenWR;
-	for(i=0;i<sizeof(ctlg);i+=lenWR)
+	if(0>lseek(fd,0,SEEK_SET)){
+		printf("Error seeking on repository: %s\n", strerror(errno));
+		return RV_ERROR_I_O_FILES;
+	}
+	for(i=0;i<sizeof(Catalog);i+=lenWR)
 	{
-		lenWR = write(fd, &ctlg ,MIN(BufferSize,sizeof(ctlg)-i));
+		lenWR = write(fd, ctlg ,MIN(BufferSize,sizeof(Catalog)-i));
 		if (lenWR < 0) {
 			printf("Error writing to file: %s\n", strerror(errno));
 			return RV_ERROR_I_O_FILES;
 		}
 	}
 	printf("size that written to catalog file %d\n", i);
-	printf("sizeof ctlg %ld\n",sizeof(ctlg) );
+	printf("sizeof ctlg %ld\n",sizeof(*ctlg) );
 	printf("succes in write to Catalog\n");
 	return RV_SUCCESS;
 }
 ///////////////////////////////////////////
-int read_file_to_catalog(Catalog ctlg,char* repository)
+int read_file_to_catalog(Catalog* ctlg,char* repository)
 {
 	int i=0;
 	ssize_t lenRD;
 	int fd;
-	fd = open(repository,O_RDWR|O_APPEND);//TODO chek if the flags right
-	for(i=0;i<sizeof(ctlg);i+=lenRD)
+	fd = open(repository,O_RDWR);//TODO chek if the flags right
+	if (fd < 0) {
+		printf("Error in open Repository file: %s\n", strerror(errno));
+		return RV_ERROR_I_O_FILES;
+	}
+	if(0>lseek(fd,0,SEEK_SET)){
+		printf("Error seeking on repository: %s\n", strerror(errno));
+		return RV_ERROR_I_O_FILES;
+	}
+	for(i=0;i<sizeof(Catalog);i+=lenRD)
 	{
-		lenRD = read(fd, &ctlg ,MIN( BufferSize, sizeof(ctlg) - i));
+		lenRD = read(fd, ctlg ,MIN( BufferSize, sizeof(Catalog) - i));
+		printf("num of loop in reading ctlg  %d\n",i );
 		if (lenRD < 0) {
 			printf("Error reading from file: %s\n", strerror(errno));
 			return RV_ERROR_I_O_FILES;
 		}
 	}
+	printf("size that read to catalog file %d\n", i);
 	printf("succes in read file to Catalog\n");
 	return fd;
 }
@@ -288,18 +303,22 @@ static RetVals init(char* repository, char* arg)
 		printf("Fail the requested file size isn't big enough\n");
 		return RV_NOT_ENOUGH_SPACE;
 	}
-	int fd = open(repository,O_RDWR|O_CREAT|O_APPEND,0644);//TODO premission thing
+	int fd = open(repository,O_RDWR|O_CREAT,0644);
 	if (fd < 0) {
 		printf("Error opening Input file: %s\n", strerror(errno));
 		return -1;
 	}
-	return write_catlog_to_file(ctlg,fd);	
+	if(0 > write_catlog_to_file(&ctlg,fd)){
+		return RV_ERROR_I_O_FILES;
+	}	
+	close(fd);
+	return RV_SUCCESS;
 }
 ///////////////////////////////////////////
 int list(char* repository)
 {
 	Catalog ctlg;
-	int fd = read_file_to_catalog(ctlg,repository);
+	int fd = read_file_to_catalog(&ctlg,repository);
 	if (fd == RV_ERROR_I_O_FILES){
 		return RV_ERROR_I_O_FILES; //TODO check if that ok
 	}
@@ -308,7 +327,7 @@ int list(char* repository)
 	for (i = 0; i < ctlg.meta_data.files_count; ++i)
 	{
 		strftime(time_str,80,"%c", localtime(&ctlg.fat_record[i].insertion_date));
-		printf("%9.9s %9.9s  %3.9o %9.9s\n",
+		printf("%2.9s %9.9s  %5.4o %9.30s\n",
 		ctlg.fat_record[i].file_name,
 		convert_bytes_to_readable_str((ssize_t)(ctlg.fat_record[i].file_real_size)),
 		0777&ctlg.fat_record[i].permissions,
@@ -317,13 +336,13 @@ int list(char* repository)
 	close(fd);
 }
 ///////////////////////////////////////////
-ssize_t get_file_curr_size(char *file_name){//TODO maybe const char
+ssize_t get_file_curr_size(char *file_name){
 	struct stat file_stat;
     if(stat(file_name,&file_stat) < 0) return RV_ERROR_I_O_FILES;
 	return file_stat.st_size;
 }
 ///////////////////////////////////////////
-mode_t get_file_curr_permissions(char *file_name){//TODO maybe const char
+mode_t get_file_curr_permissions(char *file_name){
 	struct stat file_stat;
     if(stat(file_name,&file_stat) < 0) return RV_ERROR_I_O_FILES;
 	return file_stat.st_mode;
@@ -348,7 +367,10 @@ short sort_data_blocks(Catalog ctlg,DataBlockInfo* data_blocks){
 ///////////////////////////////////////////
 int cmpfunc (const void * a, const void * b)
 {
-   return ((int) (*(DataBlockInfo*)a).offset - (*(DataBlockInfo*)b).offset );
+   if(0< (*(DataBlockInfo*)a).offset - (*(DataBlockInfo*)b).offset ) {
+   		return 1;
+   }
+   return -1;
 }
 
 ///////////////////////////////////////////
@@ -368,7 +390,7 @@ short find_gaps(Catalog ctlg,short block_num,DataBlockInfo* data_blocks,DataBloc
 		start = end + data_blocks[i+1].size;
 	}
 	end = ctlg.meta_data.file_max_capacity;
-	printf("the ctlg.meta_data.file_max_capacity is : %ld\n",end);
+	printf("the ctlg.meta_data.file_max_capacity is : %ld\n",ctlg.meta_data.file_max_capacity);
 	if(end-start>0){
 		gap_blocks[gaps_num].offset = start +1;
 		gap_blocks[gaps_num].size = end-start;
@@ -470,11 +492,13 @@ int insert_file_to_gaps(DataBlockInfo* max_gaps, ssize_t file_size, Catalog ctlg
 			printf("Error seeking on repository: %s\n", strerror(errno));
 			return RV_ERROR_I_O_FILES;
 		}
+		printf("pass here 1\n");
 		lenWR = write(fdVault, RightDellimiter ,dellimterLen);
 		if (dellimterLen != lenWR) {
 			printf("Error writing to file: %s\n", strerror(errno));
 			return RV_ERROR_I_O_FILES;
 		}
+		printf("pass here 1\n");
 
 		for(j=0;j<MIN(left_to_write_from_file,max_gaps[i].size -2*dellimterLen) ;j+=lenRD)
 		{
@@ -490,22 +514,29 @@ int insert_file_to_gaps(DataBlockInfo* max_gaps, ssize_t file_size, Catalog ctlg
 			}
 		}
 		left_to_write_from_file -= j;
+		printf("pass here 1\n");
 
 		lenWR = write(fdVault, LeftDellimiter ,dellimterLen);
 		if (dellimterLen != lenWR) {
 			printf("Error writing to file: %s\n", strerror(errno));
 			return RV_ERROR_I_O_FILES;
 		}
-		ctlg.fat_record[index_of_file].blocks[j].size += (j+2*dellimterLen);
-		ctlg.fat_record[index_of_file].blocks[j].offset = max_gaps[i].offset;
-		ctlg.fat_record[index_of_file].blocks[j].file_index = index_of_file;
+		printf("pass here 1\n");
+		ctlg.fat_record[index_of_file].blocks[i].size += (j+2*dellimterLen);
+		printf("pass here 2\n");
+		ctlg.fat_record[index_of_file].blocks[i].offset = max_gaps[i].offset;
+		printf("pass here 2\n");
+		ctlg.fat_record[index_of_file].blocks[i].file_index = index_of_file;
+		printf("pass here 1\n");
+
 	}
 	return RV_SUCCESS;
 }
 ///////////////////////////////////////////
 RetVals add(char* repository, char* arg){
 	Catalog ctlg;
-	int fdVault = read_file_to_catalog(ctlg,repository);
+	printf("the size of the catalog : %ld\n", sizeof(ctlg));
+	int fdVault = read_file_to_catalog(&ctlg,repository);
 	if(-1 == fdVault){
 		return RV_ERROR_I_O_FILES;
 	}
@@ -514,8 +545,9 @@ RetVals add(char* repository, char* arg){
 		printf("The file: %s allready exists in the repository \n",arg);
 		return RV_FILE_NAME_ALLREADY_EXISTS;
 	}
-	if(get_file_curr_size(repository) + get_file_curr_size(arg) + 2*dellimterLen < ctlg.meta_data.file_max_capacity){
+	if(get_file_curr_size(repository) + get_file_curr_size(arg) + 2*dellimterLen > ctlg.meta_data.file_max_capacity){
 		printf("There is no avaible space in the repository for file : %s\n",arg);
+		return RV_NOT_ENOUGH_SPACE;
 	}
 	int fdAdd = open(file_name_to_add, O_RDONLY);
 	if (fdAdd < 0) {
@@ -525,8 +557,10 @@ RetVals add(char* repository, char* arg){
 	short index_of_file = get_available_space_in_fat_rec(ctlg);
 	if(-1 == index_of_file){
 		printf("Error you reach the number of capable files to store : %d\n",MaxCapableFiles);
-		return -1;
+		return RV_NOT_ENOUGH_SPACE;
 	}
+	printf("the ctlg.meta_data.file_max_capacity is : %ld\n",ctlg.meta_data.file_max_capacity);
+
 	sprintf(ctlg.fat_record[index_of_file].file_name,"%s",file_name_to_add);
 	ctlg.fat_record[index_of_file].permissions = get_file_curr_permissions(arg);
 	ctlg.fat_record[index_of_file].insertion_date = time(NULL);
@@ -538,18 +572,24 @@ RetVals add(char* repository, char* arg){
 	DataBlockInfo data_blocks[MaxFragmentesCount*MaxCapableFiles];  //300
 	DataBlockInfo gap_blocks[MaxFragmentesCount*MaxCapableFiles+1]; //301
 	DataBlockInfo max_gaps[MaxFragmentesCount];						//3
+	printf("heeeerrrreee 1\n");
 	short block_num;
 	short gaps_num;
 	block_num = sort_data_blocks(ctlg, data_blocks);
 	gaps_num = find_gaps(ctlg,block_num, data_blocks,gap_blocks);
+	printf("heeeerrrreee 2\n");
 	if( is_suitable_gaps(get_file_curr_size(arg),gaps_num, gap_blocks, max_gaps)){
+		printf("heeeerrrreee 3\n");
 		insert_file_to_gaps(max_gaps, get_file_curr_size(arg), ctlg, fdAdd,  fdVault, index_of_file);
+		printf("heeeerrrreee 3\n");
 	}else{
 		printf("is a free space but the content has to be fragmented into more than %d blocks\n", MaxFragmentesCount);
 		return RV_SUCCESS;
 	}
-	if (write_catlog_to_file(ctlg,fdVault)<0)
+	printf("heeeerrrreee 3\n");
+	if (write_catlog_to_file(&ctlg,fdVault)<0)
 		return RV_ERROR_I_O_FILES;
+	printf("heeeerrrreee 4\n");
 	return RV_SUCCESS;
 }
 ///////////////////////////////////////////
@@ -558,21 +598,13 @@ int get_the_file_name_index_in_catalog(Catalog ctlg, char* file_name)
 	int i;
 	for ( i = 0; i < ctlg.meta_data.files_count; ++i)
 	{
-		if (strcmp(ctlg.fat_record[i].file_name , file_name)) return i;
+		if (0 == strcmp(ctlg.fat_record[i].file_name , file_name)){
+			//printf("the file name %s is at index %d\n",file_name,i);
+			return i;	
+		} 
 	}
 	return -1;//the file name isnt exists in the Catalog
 }
-///////////////////////////////////////////
-// RetVals orgonise_files(Catalog ctlg,int file_index)
-// {
-// 	int i;
-// 	for ( i = file_index; i < ctlg.meta_data.files_count-1; ++i)
-// 	{
-// 		sprintf (ctlg.fat_record[i].file_name, "%s",ctlg.fat_record[i+1].file_name);
-// 		//ctlg.fat_record[i].file_name = ctlg.fat_record[i+1].file_name;
-// 	}
-// 	return RV_SUCCESS;
-// }
 ///////////////////////////////////////////
 RetVals init_file_rec(Catalog ctlg,int file_index)
 {
@@ -609,7 +641,7 @@ RetVals delete_delimiters(Catalog ctlg,int file_index,int fd)
 RetVals rm(char* repository, char* arg)
 {
 	Catalog ctlg;
-	int fd = read_file_to_catalog(ctlg,repository);
+	int fd = read_file_to_catalog(&ctlg,repository);
 	int index_of_file = get_the_file_name_index_in_catalog(ctlg,arg);
 	if (index_of_file == -1)
 	{
@@ -622,10 +654,10 @@ RetVals rm(char* repository, char* arg)
 		return RV_ERROR_I_O_FILES;
 	}
 	
-	if (write_catlog_to_file(ctlg,fd)<0)
-		return RV_ERROR_I_O_FILES;
 	ctlg.meta_data.files_count--;
 	init_file_rec(ctlg,index_of_file);
+	if (write_catlog_to_file(&ctlg,fd)<0)
+		return RV_ERROR_I_O_FILES;
 	printf("%s deleted\n",arg);
 	return RV_SUCCESS;
 }
@@ -637,7 +669,9 @@ RetVals write_file_from_repository(Catalog ctlg,int fd,int index_of_file)
 	ssize_t lenRD;
 	ssize_t lenWR;
 	char fetch_buffer[BufferSize];
-
+	printf("asssrery %ld\n", ctlg.fat_record[index_of_file].blocks[0].size);
+	printf("asssrery %ld\n", ctlg.fat_record[index_of_file].blocks[1].size);
+	printf("asssrery %ld\n", ctlg.fat_record[index_of_file].blocks[2].size);
 	assert(ctlg.fat_record[index_of_file].blocks[0].size != 0);
 	assert(ctlg.fat_record[index_of_file].blocks[0].offset != 0);
 
@@ -666,14 +700,15 @@ RetVals write_file_from_repository(Catalog ctlg,int fd,int index_of_file)
 RetVals fetch(char* repository, char* arg)
 {
 	Catalog ctlg;
-	int fd = read_file_to_catalog(ctlg,repository);
+	int fd = read_file_to_catalog(&ctlg,repository);
 	int index_of_file = get_the_file_name_index_in_catalog(ctlg,arg);
 	if (index_of_file == -1)
 	{
 		printf("Fail the file: %s is not in the vault\n",arg);
 		return RV_SUCCESS;
 	}
-	int fdOut = open(arg, O_WRONLY|O_CREAT|O_TRUNC,ctlg.fat_record[index_of_file].permissions);
+	///int fdOut = open(arg, O_WRONLY|O_CREAT|O_TRUNC,ctlg.fat_record[index_of_file].permissions);
+	int fdOut = open(arg,ctlg.fat_record[index_of_file].permissions);
 	if (fdOut < 0) {
 		if(errno == EACCES){
 			printf("no premission to create the file in this directory : %s\n", strerror( errno));
@@ -732,7 +767,7 @@ double get_fragmention_ratio(Catalog ctlg,char* repository)
 int status(char* repository)
 {
 	Catalog ctlg;
-	int fd = read_file_to_catalog(ctlg,repository);
+	int fd = read_file_to_catalog(&ctlg,repository);
 	printf("Number of files: %d\n",ctlg.meta_data.files_count);
 	printf("Total size: %zd\n",(get_total_file_sizes_without_dellimiters(ctlg)));
 	printf("Fragmentation ratio: %lf\n",get_fragmention_ratio(ctlg,repository));
