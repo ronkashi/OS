@@ -1,3 +1,5 @@
+///////////////////////////////////////////
+
 #include <stdio.h>
 #include <ctype.h>
 #include <unistd.h>
@@ -18,8 +20,8 @@
 #define LeftDellimiter ">>>>>>>>"
 #define dellimterLen 8
 #define MaxFragmentesCount 3
-#define MaxCapableFiles 100
-#define FileNameLength 256
+#define MaxCapableFiles 4 //100
+#define FileNameLength 10 //257
 #define Ksize 1024
 #define BufferSize 4096
 #define _FILE_OFFSET_BITS 64
@@ -83,28 +85,29 @@ typedef struct _Catalog
 
 Command get_command(char* cmd);
 void print_usage();
-RetVals write_catlog_to_file(Catalog* ctlg,int fd);
-int read_file_to_catalog(Catalog* ctlg,char* repository);
+RetVals write_catalog_to_repository(Catalog* ctlg,char* repository);
+int load_catalog_from_repository(Catalog* ctlg,char* repository);
 int unitToBytes(char unit);
 ssize_t whatIsTheSizeInBytes(char* a);
 char* convert_bytes_to_readable_str(ssize_t bytes);
-Catalog catalog_init(Catalog ctlg,ssize_t max_capacity_in_bytes);
-int get_the_file_name_index_in_catalog(Catalog ctlg, char* file_name);
-RetVals orgonise_files(Catalog ctlg,int file_index);
-RetVals delete_delimiters(Catalog ctlg,int file_index,int fd);
-RetVals write_file_from_repository(Catalog ctlg,int fd,int index_of_file);
-ssize_t get_total_file_sizes_with_dellimiters(Catalog ctlg);
-ssize_t get_total_file_sizes_without_dellimiters(Catalog ctlg);
+Catalog* catalog_init(Catalog* ctlg,ssize_t max_capacity_in_bytes);
+int get_the_file_name_index_in_catalog(Catalog* ctlg, char* file_name);
+RetVals delete_delimiters(Catalog* ctlg,int file_index,int fd);
+RetVals write_file_from_repository(Catalog* ctlg,int fd,int index_of_file);
+ssize_t get_total_file_sizes_with_dellimiters(Catalog* ctlg);
+ssize_t get_total_file_sizes_without_dellimiters(Catalog* ctlg);
+Catalog* init_file_rec(Catalog* ctlg,int file_index);
+int perform_cmd(Command cmd, Catalog* ctlg,char* repository,char* arg);
+int cmpfunc (const void * a, const void * b);
 
 
-
-static int list(char* repository);
-static int defrag(char* repository);
-static int status(char* repository);
-static RetVals init(char* repository,char* a);
-static int add(char* repository,char* a);
-static int rm(char* repository,char* a);
-static int fetch(char* repository,char* a);
+static int list(Catalog* ctlg);
+static int defrag(Catalog* ctlg);
+static int status(Catalog* ctlg,char* repository);
+RetVals init(Catalog* ctlg,char* a);
+static int add(Catalog* ctlg,char* repository, char* a);
+static int rm(Catalog* ctlg,char* repository,char* a);
+static int fetch(Catalog* ctlg,char* a);
 
 
 ///////////////////////////////////////////
@@ -113,6 +116,7 @@ int main(int argc, char* argv[])
 {
 	RetVals rv = RV_SUCCESS;
 	Command cmd = UNKNOWN;
+
 	char* repository = NULL;	
 
 	if (argc != 3 && argc != 4)
@@ -130,19 +134,35 @@ int main(int argc, char* argv[])
 		return RV_INVALID_CMD;
 	}
 
+	Catalog* ctlg = NULL;
+	ctlg = (Catalog*) malloc(sizeof(Catalog));
+	if (cmd == INIT)
+	{
+		init(ctlg,argv[3]);
+	}
+	else{
+		load_catalog_from_repository(ctlg,repository);
+		printf("ctlg->meta_data.file_max_capacity : %ld\n",ctlg->meta_data.file_max_capacity);
+		perform_cmd(cmd, ctlg,repository,argv[3]);
+	}
+
+	free(ctlg);
+	write_catalog_to_repository(ctlg,repository);
+	printf("--------------------Here end of main----------------------\n");	
+}
+////////////////////////////////////////////
+int perform_cmd(Command cmd, Catalog* ctlg,char* repository,char* arg){
 	switch (cmd)
 	{
-		case INIT:	  return init(repository,argv[3]);
-		case LIST: 	  return list(repository); 
-		case ADD:     return add(repository,argv[3]);
-		case RM:      return rm(repository,argv[3]);
-		case FETCH:   return fetch(repository,argv[3]);
-		case DEFRAG:  return defrag(repository);
-		case STATUS:  return status(repository);
-	}	
+		case LIST: 	  return list(ctlg); 
+		case ADD:     return add(ctlg,repository,arg);
+		case RM:      return rm(ctlg,repository,arg);
+		case FETCH:   return fetch(ctlg,arg);
+		case DEFRAG:  return defrag(ctlg);
+		case STATUS:  return status(ctlg,repository);
+	}
 }
- ///////////////////////////////////////////
-
+////////////////////////////////////////////
 Command get_command(char* cmd)
 {
 	if (strcasecmp(cmd, "init") == 0)
@@ -172,28 +192,34 @@ void print_usage()
 }
 
 ///////////////////////////////////////////
-RetVals write_catlog_to_file(Catalog* ctlg,int fd){
-	int i=0;
+RetVals write_catalog_to_repository(Catalog* ctlg,char* repository){
+	//int i=0;
 	ssize_t lenWR;
+	if(NULL == ctlg){printf("a bug\n");}
+	int fd = open(repository,O_RDWR|O_CREAT,0644);
+	if (fd < 0) {
+		printf("Error opening Input file: %s\n", strerror(errno));
+		return -1;
+	}
 	if(0>lseek(fd,0,SEEK_SET)){
 		printf("Error seeking on repository: %s\n", strerror(errno));
 		return RV_ERROR_I_O_FILES;
 	}
-	for(i=0;i<sizeof(Catalog);i+=lenWR)
-	{
-		lenWR = write(fd, ctlg ,MIN(BufferSize,sizeof(Catalog)-i));
-		if (lenWR < 0) {
-			printf("Error writing to file: %s\n", strerror(errno));
-			return RV_ERROR_I_O_FILES;
-		}
-	}
-	printf("size that written to catalog file %d\n", i);
+	printf("file descriptor in write_catalog_to_repository is : %d\n",fd );
 	printf("sizeof ctlg %ld\n",sizeof(*ctlg) );
-	printf("succes in write to Catalog\n");
+	printf("repository name : %s\n",repository );
+	lenWR = write(fd, ctlg ,sizeof(Catalog));
+	if (lenWR < 0) {
+		printf("Error writing to file: %s\n", strerror(errno));
+		return RV_ERROR_I_O_FILES;
+	}
+	printf("size that written to catalog file %ld\n", lenWR);
+	printf("success in write_catalog_to_repository\n");
+	close(fd);
 	return RV_SUCCESS;
 }
 ///////////////////////////////////////////
-int read_file_to_catalog(Catalog* ctlg,char* repository)
+int load_catalog_from_repository(Catalog* ctlg,char* repository)
 {
 	int i=0;
 	ssize_t lenRD;
@@ -203,21 +229,31 @@ int read_file_to_catalog(Catalog* ctlg,char* repository)
 		printf("Error in open Repository file: %s\n", strerror(errno));
 		return RV_ERROR_I_O_FILES;
 	}
-	if(0>lseek(fd,0,SEEK_SET)){
-		printf("Error seeking on repository: %s\n", strerror(errno));
+	// if(0>lseek(fd,0,SEEK_SET)){
+	// 	printf("Error seeking on Repository: %s\n", strerror(errno));
+	// 	return RV_ERROR_I_O_FILES;
+	// }
+	printf("file descriptor in load_catalog_from_repository is : %d\n",fd );
+	lenRD = read(fd, ctlg ,sizeof(Catalog));
+	if(lenRD < 0) {
+		printf("Error reading from file: %s\n", strerror(errno));
 		return RV_ERROR_I_O_FILES;
 	}
-	for(i=0;i<sizeof(Catalog);i+=lenRD)
-	{
-		lenRD = read(fd, ctlg ,MIN( BufferSize, sizeof(Catalog) - i));
-		printf("num of loop in reading ctlg  %d\n",i );
-		if (lenRD < 0) {
-			printf("Error reading from file: %s\n", strerror(errno));
-			return RV_ERROR_I_O_FILES;
-		}
-	}
-	printf("size that read to catalog file %d\n", i);
-	printf("succes in read file to Catalog\n");
+	// for(i=0;i<sizeof(Catalog);i+=lenRD)
+	// {
+	// 	lenRD = read(fd, ctlg ,MIN( BufferSize, (sizeof(Catalog) - i)));
+	// 	if (lenRD < 0) {
+	// 		printf("Error reading from file: %s\n", strerror(errno));
+	// 		fflush(NULL);
+	// 		return RV_ERROR_I_O_FILES;
+
+	// 	}
+	// }
+	// printf("size that read to catalog file %d\n",Ri);
+	// fflush(NULL);
+	close(fd);
+	printf("succes in load_catalog_from_repository\n");
+	fflush(NULL);
 	return fd;
 }
 ///////////////////////////////////////////
@@ -230,7 +266,7 @@ int unit_to_bytes(char unit)
 	case 'K': 	return Ksize;
 	case 'M': 	return Ksize * Ksize;
 	case 'G': 	return Ksize * Ksize * Ksize;
-	default: 	printf("Invalid unit\n"); return 0;
+	default: 	printf("Invalid unit\n"); return -1;
 	}
 }
 ///////////////////////////////////////////
@@ -276,64 +312,53 @@ char* convert_bytes_to_readable_str(ssize_t bytes)
 }
 
 ///////////////////////////////////////////
-Catalog catalog_init(Catalog ctlg,ssize_t max_capacity_in_bytes)
+Catalog* catalog_init(Catalog* ctlg,ssize_t max_capacity_in_bytes)
 {
 	int i;
-	//ctlg.meta_data.repository_size = sizeof(ctlg);
-	ctlg.meta_data.creation_time = time(NULL);//TODO maybe its a syscall
-	ctlg.meta_data.modification_time = time(NULL);//TODO maybe its a syscall
-	ctlg.meta_data.files_count = 0;
-	ctlg.meta_data.file_max_capacity = max_capacity_in_bytes;
-	for (i = 0; i < MaxCapableFiles; ++i)
+	ctlg->meta_data.creation_time = time(NULL);//TODO maybe its a syscall
+	ctlg->meta_data.modification_time = time(NULL);//TODO maybe its a syscall
+	ctlg->meta_data.files_count = 0;
+	ctlg->meta_data.file_max_capacity = max_capacity_in_bytes;
+	for (i = 0; i < MaxCapableFiles; ++i)//TODO max capable
 	{
+		printf("the index is : %d\n", i);
 		init_file_rec(ctlg,i);
 	}
+	if(NULL == ctlg){printf("a bug in catalog init \n");}
 	return ctlg;
-	//TODO maybe to init the fat record
 }
 ///////////////////////////////////////////
 
-static RetVals init(char* repository, char* arg)
+RetVals init(Catalog* ctlg , char* arg)
 {
 	ssize_t size = what_is_the_size_in_bytes(arg);
-	Catalog ctlg;
-	ctlg = catalog_init(ctlg,size);
-	
-	if(size < sizeof(ctlg)+2*dellimterLen){
+	if (size < 0)
+	{
+		printf("file size to init is invalid\n");
+		return RV_INVALID_CMD;
+	}
+	if(size < sizeof(Catalog)+2*dellimterLen){
 		printf("Fail the requested file size isn't big enough\n");
 		return RV_NOT_ENOUGH_SPACE;
 	}
-	int fd = open(repository,O_RDWR|O_CREAT,0644);
-	if (fd < 0) {
-		printf("Error opening Input file: %s\n", strerror(errno));
-		return -1;
-	}
-	if(0 > write_catlog_to_file(&ctlg,fd)){
-		return RV_ERROR_I_O_FILES;
-	}	
-	close(fd);
+	catalog_init(ctlg,size);
+	if(NULL == ctlg){printf("a bug in init\n");}
 	return RV_SUCCESS;
 }
 ///////////////////////////////////////////
-int list(char* repository)
+int list(Catalog* ctlg)
 {
-	Catalog ctlg;
-	int fd = read_file_to_catalog(&ctlg,repository);
-	if (fd == RV_ERROR_I_O_FILES){
-		return RV_ERROR_I_O_FILES; //TODO check if that ok
-	}
 	int i = 0;
-	char time_str[80];
-	for (i = 0; i < ctlg.meta_data.files_count; ++i)
+	for (i = 0; i < ctlg->meta_data.files_count; ++i)
 	{
-		strftime(time_str,80,"%c", localtime(&ctlg.fat_record[i].insertion_date));
+		printf("here SEG\n");
+		printf("here SEG\n");
 		printf("%2.9s %9.9s  %5.4o %9.30s\n",
-		ctlg.fat_record[i].file_name,
-		convert_bytes_to_readable_str((ssize_t)(ctlg.fat_record[i].file_real_size)),
-		0777&ctlg.fat_record[i].permissions,
-		time_str);
+		ctlg->fat_record[i].file_name,
+		convert_bytes_to_readable_str((ssize_t)(ctlg->fat_record[i].file_real_size)),
+		0777&ctlg->fat_record[i].permissions,
+		ctime(&(ctlg->fat_record[i].insertion_date)));
 	}
-	close(fd);
 }
 ///////////////////////////////////////////
 ssize_t get_file_curr_size(char *file_name){
@@ -348,33 +373,37 @@ mode_t get_file_curr_permissions(char *file_name){
 	return file_stat.st_mode;
 }
 ///////////////////////////////////////////
-short sort_data_blocks(Catalog ctlg,DataBlockInfo* data_blocks){
+short sort_data_blocks(Catalog* ctlg,DataBlockInfo* data_blocks){
 	short block_num = 0;
 	int i,j;
-	for (i = 0; i < ctlg.meta_data.files_count; ++i)
+	printf("seg check in func %s in line %d\n",__FUNCTION__,__LINE__ );
+	printf("%d\n",ctlg->meta_data.files_count );
+	for (i = 0; i < ctlg->meta_data.files_count; i++)
 	{
-		for (j = 0; j < MaxFragmentesCount; ++j)
+		printf("seg check in func %s in line %d\n",__FUNCTION__,__LINE__ );
+		for (j = 0; j < MaxFragmentesCount; j++)
 		{
-			if(0 != ctlg.fat_record[i].blocks[j].offset){
-				data_blocks[block_num] = ctlg.fat_record[i].blocks[j];
+			printf("seg check in func %s in line %d\n",__FUNCTION__,__LINE__ );
+			if(0 != ctlg->fat_record[i].blocks[j].offset){
+				data_blocks[block_num] = ctlg->fat_record[i].blocks[j];
 				block_num++;	
 			}else break;
 		}
 	}
-	qsort(data_blocks,block_num,sizeof(DataBlockInfo),cmpfunc());
+	qsort(data_blocks, block_num, sizeof(DataBlockInfo), cmpfunc);
 	return block_num;
 }
 ///////////////////////////////////////////
 int cmpfunc (const void * a, const void * b)
 {
-   if(0< (*(DataBlockInfo*)a).offset - (*(DataBlockInfo*)b).offset ) {
+   if(0 < ((DataBlockInfo*)a)->offset - ((DataBlockInfo*)b)->offset ) {
    		return 1;
    }
    return -1;
 }
 
 ///////////////////////////////////////////
-short find_gaps(Catalog ctlg,short block_num,DataBlockInfo* data_blocks,DataBlockInfo* gap_blocks){
+short find_gaps(Catalog* ctlg,short block_num,DataBlockInfo* data_blocks,DataBlockInfo* gap_blocks){
 	ssize_t start = sizeof(Catalog);
 	ssize_t end;
 	short gaps_num = 0;
@@ -382,19 +411,25 @@ short find_gaps(Catalog ctlg,short block_num,DataBlockInfo* data_blocks,DataBloc
 	for (i = 0; i < block_num; ++i)
 	{
 		end = data_blocks[i].offset;
-		if(end-start>0){
-			gap_blocks[gaps_num].offset = start +1;
+		if(end-start>1){
+			gap_blocks[gaps_num].offset = start;
 			gap_blocks[gaps_num].size = end-start;
 			gaps_num++;
 		}
-		start = end + data_blocks[i+1].size;
+		start = end + data_blocks[i].size;
 	}
-	end = ctlg.meta_data.file_max_capacity;
-	printf("the ctlg.meta_data.file_max_capacity is : %ld\n",ctlg.meta_data.file_max_capacity);
-	if(end-start>0){
-		gap_blocks[gaps_num].offset = start +1;
+	end = ctlg->meta_data.file_max_capacity;
+	printf("the ctlg->meta_data.file_max_capacity is : %ld\n",ctlg->meta_data.file_max_capacity);
+	if(end-start>1){
+		gap_blocks[gaps_num].offset = start;
 		gap_blocks[gaps_num].size = end-start;
 		gaps_num++;
+	}
+	for (i = 0; i < gaps_num; ++i)
+	{
+		printf("gap_blocks[%d].size %ld\n",i,gap_blocks[i].size );
+		printf("gap_blocks[%d].size %ld\n",i,gap_blocks[i].offset );
+
 	}
 	printf("the gaps Number is : %d\n",gaps_num);
 	return gaps_num;
@@ -423,7 +458,8 @@ void swap(DataBlockInfo* max_gaps,int i,int j){
 * get the gaps in the vault ordered by their offset
 * return if there is a defragmention that the file can fit in
 */
-bool is_suitable_gaps(ssize_t file_size, short gaps_num,DataBlockInfo* gap_blocks,DataBlockInfo* max_gaps){
+bool is_suitable_gaps(ssize_t file_size, 
+						short gaps_num,DataBlockInfo* gap_blocks,DataBlockInfo* max_gaps){
 	int i= 0;
 	for (i = 0; i < MaxFragmentesCount; ++i)
 	{
@@ -459,16 +495,18 @@ bool is_suitable_gaps(ssize_t file_size, short gaps_num,DataBlockInfo* gap_block
 			}
 		}
 	}
-
 	return false; //MUST to defrag to add it
 }
 ///////////////////////////////////////////
-int get_available_space_in_fat_rec(Catalog ctlg){
+int get_available_space_in_fat_rec(Catalog* ctlg){
 	int i =0;
 	for (i = 0; i < MaxCapableFiles; ++i)
 	{
-		if (0 == strlen(ctlg.fat_record[i].file_name))
+		printf("the file name in index %d is : %s\n",i,ctlg->fat_record[i].file_name);
+		printf("seg check in func %s in line %d\n",__FUNCTION__,__LINE__ );
+		if (0 == strlen(ctlg->fat_record[i].file_name))
 		{
+			printf("seg check in func %s in line %d\n",__FUNCTION__,__LINE__ );
 			return i;
 		}
 	}
@@ -476,7 +514,8 @@ int get_available_space_in_fat_rec(Catalog ctlg){
 }
 ///////////////////////////////////////////
 //gets the first 3 max gaps that we saw (from beging of the file) and insert to them
-int insert_file_to_gaps(DataBlockInfo* max_gaps, ssize_t file_size, Catalog ctlg, int fdAdd, int fdVault, short index_of_file){
+int insert_file_to_gaps(DataBlockInfo* max_gaps, ssize_t file_size, 
+						Catalog* ctlg, int fdAdd, int fdVault, short index_of_file){
 	int i,j;
 	ssize_t lenRD;
 	ssize_t lenWR;
@@ -486,20 +525,17 @@ int insert_file_to_gaps(DataBlockInfo* max_gaps, ssize_t file_size, Catalog ctlg
 
 	assert(max_gaps[0].size != 0);
 	assert(max_gaps[0].offset != 0);
-	for (i = 0; i < MaxFragmentesCount && max_gaps[i].size !=0 ; ++i)
+	for (i = 0; i < MaxFragmentesCount && max_gaps[i].size > 2*dellimterLen; ++i) // 
 	{
 		if(0>lseek(fdVault ,max_gaps[i].offset,SEEK_SET)){
 			printf("Error seeking on repository: %s\n", strerror(errno));
 			return RV_ERROR_I_O_FILES;
 		}
-		printf("pass here 1\n");
-		lenWR = write(fdVault, RightDellimiter ,dellimterLen);
-		if (dellimterLen != lenWR) {
+		
+		if (dellimterLen != write(fdVault, RightDellimiter ,dellimterLen)) {
 			printf("Error writing to file: %s\n", strerror(errno));
 			return RV_ERROR_I_O_FILES;
 		}
-		printf("pass here 1\n");
-
 		for(j=0;j<MIN(left_to_write_from_file,max_gaps[i].size -2*dellimterLen) ;j+=lenRD)
 		{
 			lenRD = read(fdAdd, &buffer ,MIN(BufferSize,(MIN(left_to_write_from_file,max_gaps[i].size -2*dellimterLen - j))));
@@ -514,44 +550,44 @@ int insert_file_to_gaps(DataBlockInfo* max_gaps, ssize_t file_size, Catalog ctlg
 			}
 		}
 		left_to_write_from_file -= j;
-		printf("pass here 1\n");
 
-		lenWR = write(fdVault, LeftDellimiter ,dellimterLen);
-		if (dellimterLen != lenWR) {
+		if (dellimterLen != write(fdVault, LeftDellimiter ,dellimterLen)) {
 			printf("Error writing to file: %s\n", strerror(errno));
 			return RV_ERROR_I_O_FILES;
 		}
-		printf("pass here 1\n");
-		ctlg.fat_record[index_of_file].blocks[i].size += (j+2*dellimterLen);
-		printf("pass here 2\n");
-		ctlg.fat_record[index_of_file].blocks[i].offset = max_gaps[i].offset;
-		printf("pass here 2\n");
-		ctlg.fat_record[index_of_file].blocks[i].file_index = index_of_file;
-		printf("pass here 1\n");
-
+		ctlg->fat_record[index_of_file].blocks[i].size += (j+2*dellimterLen);
+		printf(" size that added in block %d is size %ld \n",i, (ctlg)->fat_record[index_of_file].blocks[i].size);
+		ctlg->fat_record[index_of_file].blocks[i].offset = max_gaps[i].offset;
+		ctlg->fat_record[index_of_file].blocks[i].file_index = index_of_file;
 	}
 	return RV_SUCCESS;
 }
 ///////////////////////////////////////////
-RetVals add(char* repository, char* arg){
-	Catalog ctlg;
-	printf("the size of the catalog : %ld\n", sizeof(ctlg));
-	int fdVault = read_file_to_catalog(&ctlg,repository);
-	if(-1 == fdVault){
+RetVals add(Catalog* ctlg,char *repository, char *arg){
+	char* file_name_to_add = basename(arg);
+	int fdVault = open(repository,O_RDWR);
+	if (fdVault<0)
+	{
+		printf("Error opening repository file: %s\n", strerror( errno));
 		return RV_ERROR_I_O_FILES;
 	}
-	char* file_name_to_add = basename(arg);
+	printf("----------in func %s ctlg->meta_data.files_count : %d\n",__FUNCTION__,ctlg->meta_data.files_count);
 	if(-1 != get_the_file_name_index_in_catalog(ctlg,file_name_to_add)){
 		printf("The file: %s allready exists in the repository \n",arg);
 		return RV_FILE_NAME_ALLREADY_EXISTS;
 	}
-	if(get_file_curr_size(repository) + get_file_curr_size(arg) + 2*dellimterLen > ctlg.meta_data.file_max_capacity){
+	// printf("ctlg->meta_data.file_max_capacity : %ld\n",ctlg->meta_data.file_max_capacity);
+	// printf("get_file_curr_size(repository) : %ld\n",get_file_curr_size(repository));
+	// printf("get_file_curr_size(arg) : %ld\n",get_file_curr_size(arg));
+	if(get_file_curr_size(repository) + get_file_curr_size(arg) + 2*dellimterLen > ctlg->meta_data.file_max_capacity){
 		printf("There is no avaible space in the repository for file : %s\n",arg);
 		return RV_NOT_ENOUGH_SPACE;
 	}
-	int fdAdd = open(file_name_to_add, O_RDONLY);
+		printf("seg check %d\n",__LINE__ );
+
+	int fdAdd = open(arg, O_RDONLY);
 	if (fdAdd < 0) {
-		printf("Error opening Output file: %s\n", strerror( errno));
+		printf("Error opening Add file: %s\n", strerror( errno));
 		return RV_ERROR_I_O_FILES;
 	}
 	short index_of_file = get_available_space_in_fat_rec(ctlg);
@@ -559,46 +595,60 @@ RetVals add(char* repository, char* arg){
 		printf("Error you reach the number of capable files to store : %d\n",MaxCapableFiles);
 		return RV_NOT_ENOUGH_SPACE;
 	}
-	printf("the ctlg.meta_data.file_max_capacity is : %ld\n",ctlg.meta_data.file_max_capacity);
-
-	sprintf(ctlg.fat_record[index_of_file].file_name,"%s",file_name_to_add);
-	ctlg.fat_record[index_of_file].permissions = get_file_curr_permissions(arg);
-	ctlg.fat_record[index_of_file].insertion_date = time(NULL);
-	ctlg.fat_record[index_of_file].file_real_size = get_file_curr_size(arg);
-	ctlg.meta_data.files_count++;
-
-
-
+	printf("seg check in func %s in line %d\n",__FUNCTION__,__LINE__ );
 	DataBlockInfo data_blocks[MaxFragmentesCount*MaxCapableFiles];  //300
 	DataBlockInfo gap_blocks[MaxFragmentesCount*MaxCapableFiles+1]; //301
 	DataBlockInfo max_gaps[MaxFragmentesCount];						//3
-	printf("heeeerrrreee 1\n");
 	short block_num;
 	short gaps_num;
+
+	int i;
+	printf("seg check in func %s in line %d\n",__FUNCTION__,__LINE__ );
 	block_num = sort_data_blocks(ctlg, data_blocks);
+	printf("seg check in func %s in line %d\n",__FUNCTION__,__LINE__ );
 	gaps_num = find_gaps(ctlg,block_num, data_blocks,gap_blocks);
-	printf("heeeerrrreee 2\n");
+	printf("seg check in func %s in line %d\n",__FUNCTION__,__LINE__ );
+	printf("~~~~~block_num : %d ------ gaps_num : %d ~~~~~~~~\n",block_num,gaps_num);
 	if( is_suitable_gaps(get_file_curr_size(arg),gaps_num, gap_blocks, max_gaps)){
-		printf("heeeerrrreee 3\n");
+		for (i = 0; i < MaxFragmentesCount; ++i)
+		{
+			printf("max_gap[%d] offset : %ld gap size :  %ld\n",i,max_gaps[i].offset,max_gaps[i].size);
+		}
 		insert_file_to_gaps(max_gaps, get_file_curr_size(arg), ctlg, fdAdd,  fdVault, index_of_file);
-		printf("heeeerrrreee 3\n");
-	}else{
+		sprintf(ctlg->fat_record[index_of_file].file_name,"%s",file_name_to_add);
+		ctlg->fat_record[index_of_file].permissions = get_file_curr_permissions(arg);
+		ctlg->fat_record[index_of_file].insertion_date = time(NULL);
+		ctlg->fat_record[index_of_file].file_real_size = get_file_curr_size(arg);
+		ctlg->meta_data.files_count++;
+	}
+	else
+	{
 		printf("is a free space but the content has to be fragmented into more than %d blocks\n", MaxFragmentesCount);
 		return RV_SUCCESS;
 	}
-	printf("heeeerrrreee 3\n");
-	if (write_catlog_to_file(&ctlg,fdVault)<0)
-		return RV_ERROR_I_O_FILES;
-	printf("heeeerrrreee 4\n");
+	// 	printf("seg check %d\n",__LINE__ );
+
+	// printf("~~~~~~IM here~~~~~~~~~~~\n");
+	// int i=0;
+	// printf(" size that added in block %d is size %ld \n",i, ctlg->fat_record[index_of_file].blocks[i].size);
+	// printf(" size that added in block %d is offset %ld \n",i, ctlg->fat_record[index_of_file].blocks[i].offset);
+	// printf(" size that added in block %d is file index %d \n",i, ctlg->fat_record[index_of_file].blocks[i].file_index);
+	// printf("~~~~~~IM here~~~~~~~~~~~\n");
+
+	close(fdAdd);
 	return RV_SUCCESS;
 }
 ///////////////////////////////////////////
-int get_the_file_name_index_in_catalog(Catalog ctlg, char* file_name)
+int get_the_file_name_index_in_catalog(Catalog* ctlg, char* file_name)
 {
 	int i;
-	for ( i = 0; i < ctlg.meta_data.files_count; ++i)
+	printf("seg check %d %s\n", __LINE__ , __FUNCTION__);
+	printf("seg check %d , files count %d\n",__LINE__,ctlg->meta_data.files_count );
+	for ( i = 0; i < ctlg->meta_data.files_count; ++i)
 	{
-		if (0 == strcmp(ctlg.fat_record[i].file_name , file_name)){
+		printf("seg check %d\n",__LINE__ );
+		printf("i: %d, ctlg->fat_record[i].file_name: %s\n",i, ctlg->fat_record[i].file_name);
+		if (0 == strcmp(ctlg->fat_record[i].file_name , file_name)){
 			//printf("the file name %s is at index %d\n",file_name,i);
 			return i;	
 		} 
@@ -606,83 +656,85 @@ int get_the_file_name_index_in_catalog(Catalog ctlg, char* file_name)
 	return -1;//the file name isnt exists in the Catalog
 }
 ///////////////////////////////////////////
-RetVals init_file_rec(Catalog ctlg,int file_index)
+Catalog* init_file_rec(Catalog* ctlg,int file_index)
 {
-	int i;
-	ctlg.fat_record[file_index].file_name[0]='\0';
-	for ( i = 0; i < MaxFragmentesCount; ++i)
+	int j;
+	ctlg->fat_record[file_index].file_name[0]='\0';
+	for ( j = 0; j < MaxFragmentesCount; ++j)
 	{
-		ctlg.fat_record[file_index].blocks[i].size = 0;
-		ctlg.fat_record[file_index].blocks[i].offset = 0;
-		ctlg.fat_record[file_index].blocks[i].file_index = -1;
+		ctlg->fat_record[file_index].blocks[j].size = 0;
+		ctlg->fat_record[file_index].blocks[j].offset = 0;
+		ctlg->fat_record[file_index].blocks[j].file_index = -1;
 	}
-	return RV_SUCCESS;
+	return ctlg;
 }
 ///////////////////////////////////////////
-RetVals delete_delimiters(Catalog ctlg,int file_index,int fd)
+RetVals delete_delimiters(Catalog* ctlg,int file_index,int fd)
 {
 	int i = 0;
-	int offset_absulut;
-	for (i= 0; (i < MaxFragmentesCount) && (ctlg.fat_record[file_index].blocks[i].offset != 0); ++i)
+	off_t offset_absulut;
+	for (i= 0; (i < MaxFragmentesCount) && (ctlg->fat_record[file_index].blocks[i].offset != 0); ++i)
 	{
-		offset_absulut = sizeof(ctlg)+ctlg.fat_record[file_index].blocks[i].offset;
+		offset_absulut = ctlg->fat_record[file_index].blocks[i].offset;
 		if(lseek(fd,offset_absulut,SEEK_SET) < 0) return RV_ERROR_I_O_FILES;
 		if(write(fd,"00000000",dellimterLen) != dellimterLen) return RV_ERROR_I_O_FILES;
 
-		offset_absulut += (ctlg.fat_record[file_index].blocks[i].size-2*dellimterLen);
+		offset_absulut += (ctlg->fat_record[file_index].blocks[i].size-dellimterLen);
 		if(lseek(fd,offset_absulut,SEEK_SET) < 0) return RV_ERROR_I_O_FILES;
 		if(write(fd,"00000000",dellimterLen) != dellimterLen) return RV_ERROR_I_O_FILES;
 
 	}
-	//ctlg.meta_data.repository_size -= (size+2*i*dellimterLen);
 	return RV_SUCCESS;
 }
 ///////////////////////////////////////////
-RetVals rm(char* repository, char* arg)
+RetVals rm(Catalog* ctlg,char* repository ,char* arg)
 {
-	Catalog ctlg;
-	int fd = read_file_to_catalog(&ctlg,repository);
+	arg = basename(arg);
 	int index_of_file = get_the_file_name_index_in_catalog(ctlg,arg);
+	int fdVault = open(repository,O_RDWR);
+	if (fdVault<0)
+	{
+		printf("Error opening repository file: %s\n", strerror( errno));
+		return RV_ERROR_I_O_FILES;
+	}
 	if (index_of_file == -1)
 	{
 		printf("Fail the file: %s is not in the vault\n",arg);
 		return RV_SUCCESS;
 	}
-	if (delete_delimiters(ctlg,index_of_file,fd) == RV_ERROR_I_O_FILES)	//TODO UPDATe everall size
+	if (delete_delimiters(ctlg,index_of_file,fdVault) == RV_ERROR_I_O_FILES)	//TODO UPDATe everall size
 	{
 		printf("Error opening Output file: %s\n", strerror( errno));
 		return RV_ERROR_I_O_FILES;
 	}
 	
-	ctlg.meta_data.files_count--;
+	ctlg->meta_data.files_count--;
 	init_file_rec(ctlg,index_of_file);
-	if (write_catlog_to_file(&ctlg,fd)<0)
-		return RV_ERROR_I_O_FILES;
 	printf("%s deleted\n",arg);
 	return RV_SUCCESS;
 }
 
 ///////////////////////////////////////////
-RetVals write_file_from_repository(Catalog ctlg,int fd,int index_of_file)
+RetVals write_file_from_repository(Catalog* ctlg,int fd,int index_of_file)
 {
 	int j=0,i=0;
 	ssize_t lenRD;
 	ssize_t lenWR;
 	char fetch_buffer[BufferSize];
-	printf("asssrery %ld\n", ctlg.fat_record[index_of_file].blocks[0].size);
-	printf("asssrery %ld\n", ctlg.fat_record[index_of_file].blocks[1].size);
-	printf("asssrery %ld\n", ctlg.fat_record[index_of_file].blocks[2].size);
-	assert(ctlg.fat_record[index_of_file].blocks[0].size != 0);
-	assert(ctlg.fat_record[index_of_file].blocks[0].offset != 0);
+	printf("asssrery %ld\n", (*ctlg).fat_record[index_of_file].blocks[0].size);
+	printf("asssrery %ld\n", (*ctlg).fat_record[index_of_file].blocks[1].size);
+	printf("asssrery %ld\n", (*ctlg).fat_record[index_of_file].blocks[2].size);
+	assert(ctlg->fat_record[index_of_file].blocks[0].size != 0);
+	assert(ctlg->fat_record[index_of_file].blocks[0].offset != 0);
 
 	for (j=0;j<MaxFragmentesCount;j++){
-		if(0>lseek(fd ,ctlg.fat_record[index_of_file].blocks[j].offset + dellimterLen ,SEEK_SET)){
+		if(0>lseek(fd ,ctlg->fat_record[index_of_file].blocks[j].offset + dellimterLen ,SEEK_SET)){
 			printf("Error seeking on repository: %s\n", strerror(errno));
 			return RV_ERROR_I_O_FILES;
 		}
-		for(i=0;i<ctlg.fat_record[index_of_file].blocks[j].size - dellimterLen;i+=lenRD)
+		for(i=0;i < ctlg->fat_record[index_of_file].blocks[j].size - dellimterLen; i+=lenRD)
 		{
-			lenRD = read(fd, &fetch_buffer ,MIN(BufferSize,(ctlg.fat_record[index_of_file].blocks[j].size - i- dellimterLen)));
+			lenRD = read(fd, &fetch_buffer ,MIN(BufferSize,(ctlg->fat_record[index_of_file].blocks[j].size - i- dellimterLen)));
 			if (lenRD < 0) {
 				printf("Error reading from repository: %s\n", strerror(errno));
 				return RV_ERROR_I_O_FILES;
@@ -697,18 +749,15 @@ RetVals write_file_from_repository(Catalog ctlg,int fd,int index_of_file)
 	return RV_SUCCESS;
 }
 ///////////////////////////////////////////
-RetVals fetch(char* repository, char* arg)
+RetVals fetch(Catalog* ctlg, char* arg)
 {
-	Catalog ctlg;
-	int fd = read_file_to_catalog(&ctlg,repository);
 	int index_of_file = get_the_file_name_index_in_catalog(ctlg,arg);
 	if (index_of_file == -1)
 	{
 		printf("Fail the file: %s is not in the vault\n",arg);
 		return RV_SUCCESS;
 	}
-	///int fdOut = open(arg, O_WRONLY|O_CREAT|O_TRUNC,ctlg.fat_record[index_of_file].permissions);
-	int fdOut = open(arg,ctlg.fat_record[index_of_file].permissions);
+	int fdOut = open(arg,O_WRONLY|O_CREAT|O_TRUNC);
 	if (fdOut < 0) {
 		if(errno == EACCES){
 			printf("no premission to create the file in this directory : %s\n", strerror( errno));
@@ -718,58 +767,66 @@ RetVals fetch(char* repository, char* arg)
 	}
 
 	RetVals RV = write_file_from_repository(ctlg,fdOut,index_of_file);
+	if(chmod(arg,ctlg->fat_record[index_of_file].permissions)<1){
+		printf("Error changing premisiions to Output file: %s\n", strerror( errno));
+		return RV_ERROR_I_O_FILES;
+	}
 	if(RV_SUCCESS == RV) printf("%s created\n",arg);
 	return RV;
 
 }
 ///////////////////////////////////////////
-int defrag(char* repository)
+int defrag(Catalog* ctlg)
 {
 
 }
 ///////////////////////////////////////////
-ssize_t get_total_file_sizes_with_dellimiters(Catalog ctlg)
+ssize_t get_total_file_sizes_with_dellimiters(Catalog* ctlg)
 {
 	int i=0,j=0;
 	ssize_t total_file_sizes_with_dellimiters =0;
-	for (i=0;i<ctlg.meta_data.files_count;i++)
+	for (i=0;i<ctlg->meta_data.files_count;i++)
 	{
-		for (j = 0; i < MaxFragmentesCount; j++)
+		printf(" the file count is %d line : %d\n", ctlg->meta_data.files_count , __LINE__);
+		for (j = 0; j < MaxFragmentesCount; j++)
 		{
-			total_file_sizes_with_dellimiters+=ctlg.fat_record[i].blocks[j].size;
+			printf("ctlg->fat_record[%d].blocks[%d].size : %ld \n",i,j, ctlg->fat_record[i].blocks[j].size);
+			total_file_sizes_with_dellimiters+=ctlg->fat_record[i].blocks[j].size;
 		}
 	}
 	return total_file_sizes_with_dellimiters;
 }
 
 ///////////////////////////////////////////
-ssize_t get_total_file_sizes_without_dellimiters(Catalog ctlg)
+ssize_t get_total_file_sizes_without_dellimiters(Catalog* ctlg)
 {
 	int i=0,j=0;
 	ssize_t total_file_sizes =0;
-	for (i=0;i<ctlg.meta_data.files_count;i++)
+	for (i=0;i<ctlg->meta_data.files_count;i++)
 	{
-		total_file_sizes+=ctlg.fat_record[i].file_real_size;
+		total_file_sizes+=ctlg->fat_record[i].file_real_size;
 	}
 	return total_file_sizes;
 }
 ///////////////////////////////////////////
-double get_fragmention_ratio(Catalog ctlg,char* repository)
+double get_fragmention_ratio(Catalog* ctlg,char* repository)
 {
 	double ratio;
 	ssize_t gap_length = get_file_curr_size(repository)
 						- get_total_file_sizes_with_dellimiters(ctlg)
-						- sizeof(ctlg);
+						- sizeof(Catalog);//TODO substract from the last sign catalog to first "<"
+	// printf("get_file_repository_size : %ld\n", get_file_curr_size(repository));
+	// printf("get_total_file_sizes_with_dellimiters : %ld\n", get_total_file_sizes_with_dellimiters(ctlg));
+	// printf("sizeof(Catalog) : %ld\n",sizeof(Catalog));
+	// printf("gap_length is : %ld\n", gap_length);
 	ratio = (double)gap_length / get_total_file_sizes_without_dellimiters(ctlg);
 	return ratio;
 }
 ///////////////////////////////////////////
-int status(char* repository)
+int status(Catalog* ctlg,char* repository)
 {
-	Catalog ctlg;
-	int fd = read_file_to_catalog(&ctlg,repository);
-	printf("Number of files: %d\n",ctlg.meta_data.files_count);
-	printf("Total size: %zd\n",(get_total_file_sizes_without_dellimiters(ctlg)));
+	printf("Number of files: %d\n",ctlg->meta_data.files_count);
+	printf("Total size: %s\n",(convert_bytes_to_readable_str(get_total_file_sizes_without_dellimiters(ctlg))));
 	printf("Fragmentation ratio: %lf\n",get_fragmention_ratio(ctlg,repository));
 }
 ///////////////////////////////////////////
