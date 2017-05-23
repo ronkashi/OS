@@ -31,8 +31,8 @@ typedef enum _RetVals
 // int parse_first_arg(char* arg,char* ch);
 ssize_t parse_length(char* arg);
 off_t parse_offset(char* arg);
-int counter(int fd, off_t offset,ssize_t len_to_process, char query_ch);
-long long count_char_in_array(char query_ch,char* arr ,int len);
+//int counter(int fd, off_t offset,ssize_t len_to_process, char query_ch);
+long long count_char_in_array(char query_ch,char* arr ,size_t len);
 
 ///////////////////////////////////////////////////////////
 // The flow:
@@ -68,24 +68,20 @@ int main(int argc, char *argv[])
 		return RV_ERROR_I_O_FILES;
     }
 	off_t start_offset = parse_offset(argv[3]);
-	ssize_t len_to_process = parse_length(argv[4]);
+	size_t len_to_process = parse_length(argv[4]);
 	if (0 > start_offset || 0 > len_to_process){
 		printf(msg_invalid_cmd);
+		close(fd);
 		return RV_INVALID_CMD;
 	}
 	/*prasing input*/
 
 	/*open mmap*/
-	// printf("len_to_process : %zd\n",len_to_process);
-	// printf("start_offset : %zd\n", start_offset);
-	// printf("fd is : %d\n", fd);
-
 	char* arr = (char*)mmap(NULL, len_to_process, PROT_READ, MAP_SHARED, fd, start_offset);
     //printf("%s\n",arr);
     if (arr == MAP_FAILED) {
-    	// printf("len_to_process : %zd\n", len_to_process);
-    	// printf("start_offset : %zd\n",start_offset );
 		printf("Error mmapping the file: %s\n", strerror(errno));
+		close(fd);
 		return RV_MAP_FAIL;
     }
     /*open mmap*/
@@ -93,8 +89,7 @@ int main(int argc, char *argv[])
     close(fd);
 
     long long R = count_char_in_array(query_ch,arr,len_to_process);
-    // printf("the counter : %d\n", R);
-    // printf("len_to_process : %zd\n",len_to_process);
+
 	if(0 > munmap(arr, len_to_process)){
 		printf("Error mmUNmapping the file: %s\n", strerror(errno));
 		return RV_MAP_FAIL;
@@ -103,7 +98,7 @@ int main(int argc, char *argv[])
     char pipe_name[FileNameLength]; 
     sprintf(pipe_name,"%s%lu",PREFFIX_PIPE,(unsigned long)getpid());
 
-    if(0 > mkfifo(pipe_name, 0666)){//TODO fix premission
+    if(0 > mkfifo(pipe_name, 0644)){
     	printf("Error in making FIFO : %s\n", strerror(errno));
 		return RV_ERROR_I_O_FILES;
     }
@@ -115,17 +110,12 @@ int main(int argc, char *argv[])
 
 
     int fdPipe = open(pipe_name, O_WRONLY);
-    // printf("fd pipe is : %d\n", fdPipe);
-    // printf("here is line %d\n",__LINE__ );
     if (0 > fdPipe) {
 		printf("Error opening pipe file for writing: %s\n", strerror(errno));
+		close(fdPipe);
+    	unlink(pipe_name);
 		return RV_ERROR_I_O_FILES;
     }
-
-    // ////5////
-    // printf("here is line %d\n",__LINE__ );
-    // kill(getppid(),SIGUSR1);
-    // printf("here is line %d\n",__LINE__ );
 
     char str[FileNameLength];
     sprintf(str,"%lld",R);
@@ -133,8 +123,6 @@ int main(int argc, char *argv[])
     	printf("Error writing to pipe file: %s\n", strerror(errno));
 		return RV_ERROR_I_O_FILES;
     }
-    /////////TODO usr2 handler my pearant already read//////////
-	//sleep(1);
 	/**closing all**/
 	close(fdPipe);
     //printf("the process %lu finished \n",(unsigned long)getpid() );
@@ -173,7 +161,7 @@ ssize_t parse_length(char* arg){
 
 ///////////////////////////////////////////////////////
 
-long long count_char_in_array(char query_ch,char* arr ,int len){
+long long count_char_in_array(char query_ch,char* arr ,size_t len){
 	long long counter=0;
 	long long i;
 	for (i = 0; i < len; ++i)

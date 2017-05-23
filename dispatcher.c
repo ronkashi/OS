@@ -33,15 +33,19 @@ typedef enum _RetVals
 
 ///////////////////////////////////////////////////////////
 static long long globalCount = 0;
+static int flagSigHandler = RV_SUCCESS;
 //////////////////////decleration//////////////////////////
 int parse_first_arg(char* arg,char* ch);
 size_t get_file_curr_size(char *file_name);
 ///////////////////////////////////////////////////////////
 // The flow:
-// 1. Determine the file size – N. Decide K – the size of the chunk each Counter processes, and Q – the
-// number of the Counter processes. Observe that N = K*Q. If N is less that twice the memory page size,
+// 1. Determine the file size – N. Decide K – the size of the chunk each Counter 
+//processes, and Q – the
+// number of the Counter processes. Observe that N = K*Q. If N is less that 
+// twice the memory page size,
 // then let Q be 1. Constrain the decision by Q ≤ 16.
-// 2. Register USR1 signal handler. Turn on SA_SIGINFO flag, so your handler function gets more arguments.
+// 2. Register USR1 signal handler. Turn on SA_SIGINFO flag, so your handler 
+//function gets more arguments.
 // See Appendix A for an example.
 // 3. Launch Q Counter processes. Use fork() and execv() pair, as shown in the class.
 // 4. Wait for all processes to finish.
@@ -54,14 +58,15 @@ void my_signal_handler( int signum, siginfo_t* info,void* ptr)
     int fdPipe = open(pipe_name, O_RDONLY);
     if (0 > fdPipe) {
 		printf("Error opening pipe file for reading: %s\n", strerror(errno));
+		flagSigHandler = RV_ERROR_I_O_FILES;
     }
     char str[FileNameLength];
-    // sprintf(str,"%d",R);
     if(0 > read(fdPipe,str,sizeof(str))){
     	printf("Error reading from pipe file: %s\n", strerror(errno));
+    	flagSigHandler = RV_ERROR_I_O_FILES;
     }
-    close(fdPipe);
     globalCount +=atoll(str);
+    close(fdPipe);
     unlink(pipe_name);
 }
 ///////////////////////////////////////////////////////////
@@ -78,13 +83,13 @@ int main(int argc, char *argv[])
 	}
 	if(-1 == access(argv[2], 0) )
    	{
-    	printf( "File %s isn't exists\n" ,argv[2]);
+    	printf("File %s isn't exists\n" ,argv[2]);
     	return RV_ERROR_I_O_FILES;
   	}
 	size_t file_size = get_file_curr_size(argv[2]);
 	if (0 > file_size)
 	{
-		printf("An error in get file size:  %s\n", strerror( errno));
+		printf("An error in getting file size:  %s\n", strerror( errno));
 		return RV_ERROR_I_O_FILES;
 	}
 
@@ -110,7 +115,7 @@ int main(int argc, char *argv[])
 	////////fork to all////
 	int i = 0;
 	int RV = RV_SUCCESS;
-	for (i = 0; i < forks_num; ++i)
+	for (i = 0; (i < forks_num) && (RV_SUCCESS == flagSigHandler); ++i)
 	{
 		pid_children[i] = fork();
 		if (pid_children[i] < 0){
@@ -123,14 +128,6 @@ int main(int argc, char *argv[])
 			// son process – do son code
 			sprintf(offset_str, "%lld",(long long)offset_arr[i]);
 			sprintf(len_of_chunk_str, "%lld",(long long) len_of_chunk[i]);
-			// printf("len_of_chunk : %lu\n", (long) len_of_chunk[i]);
-			// printf("len_of_chunk : %ld\n", (long) len_of_chunk[i]);
-			// printf("len_of_chunk : %lld\n", (long long int) len_of_chunk[i]);
-			// printf("len_of_chunk : %lld\n", (long long) len_of_chunk[i]);
-			// if (-17379 == len_of_chunk[i])
-			// {
-			// 	printf("fuckimng RK\n");
-			// }
 			char *arg_for_execv[] = {"counter", argv[1], argv[2], offset_str, len_of_chunk_str, NULL};
 
 			execv("counter", arg_for_execv);
@@ -144,7 +141,7 @@ int main(int argc, char *argv[])
 		}
 	}
 	int status;
-	for (i = 0; i < forks_num; ++i)//i
+	for (i = 0; i < forks_num; ++i)
 	{
 		waitpid(pid_children[i] , &status, 0);
 		if (! WIFEXITED(status))
@@ -152,63 +149,26 @@ int main(int argc, char *argv[])
 			RV = RV_CHILD_ERR;
 		}
 	}
-	if (RV_SUCCESS == RV){
-		//printf("The character '%s' appears %lld times in \"%s\"\n",argv[1],globalCount,argv[2]);
-		printf("%lld\n",globalCount);
+	if (RV_SUCCESS == RV && RV_SUCCESS == flagSigHandler){
+		printf("The character '%s' appears %lld times in \"%s\"\n",argv[1],globalCount,argv[2]);
 	}else{
-		//printf("An error has occurred! Not able to print Counter\n");
-		printf("-1\n");
+		printf("An error has occurred! Not able to print Counter\n");
 	}
 	return RV;
 }
 
 ///////////////////////////////////////////////////////////
 
-size_t get_file_curr_size(char *file_name){ //TODO maybe RV should be ssize_t
+size_t get_file_curr_size(char *file_name){
 	struct stat file_stat;
     if(stat(file_name,&file_stat) < 0) return RV_ERROR_I_O_FILES;
 	return file_stat.st_size;
 }
 
 ///////////////////////////////////////////////////////////
-
-// int get_num_of_forks(off_t* offset_arr, size_t* len_of_chunk, size_t size_to_devide){
-// 	int forks_num;
-// 	int num_of_pages_per_fork;
-// 	if (0 == size_to_devide)
-// 	{
-// 		return 0;
-// 	}
-// 	if (size_to_devide < 2 * MAX_NUM_FORKS * getpagesize())
-// 	{
-// 		forks_num = size_to_devide / (2 * getpagesize()) + 1;
-// 		//printf("%d\n", forks_num);
-// 		num_of_pages_per_fork = 2;
-// 	}
-// 	else{
-// 		forks_num = MAX_NUM_FORKS;
-// 		num_of_pages_per_fork =size_to_devide/(MAX_NUM_FORKS* getpagesize());
-// 	}
-// 	int i;
-// 	for ( i = 0; i < forks_num; ++i)
-// 	{
-// 		offset_arr[i] = i*num_of_pages_per_fork*getpagesize();
-// 		len_of_chunk[i] = num_of_pages_per_fork*getpagesize();
-// 		//printf("offset_arr [%d] : %zd len_of_chunk [%d] : %lu\n",i,offset_arr[i],i ,len_of_chunk[i]);
-// 	}
-// 	len_of_chunk[forks_num-1] = size_to_devide - (forks_num-1)*num_of_pages_per_fork*getpagesize();
-// 	//printf("len_of_chunk[forks_num-1] : %lld\n",(long long) len_of_chunk[forks_num - 1]);
-// 	printf("forks_num : %d\n",forks_num );
-// 	return forks_num;
-// }
-///////////////////////////////////////////////////////////
 int get_num_of_forks(off_t* offset_arr, size_t* len_of_chunk, size_t size_to_devide){
 	int forks_num;
 	int num_of_pages_per_fork;
-	// if (0 == size_to_devide)
-	// {
-	// 	return 0;
-	// }
 	if (size_to_devide <= 2 * getpagesize())
 	{
 		forks_num = 1;
@@ -224,8 +184,6 @@ int get_num_of_forks(off_t* offset_arr, size_t* len_of_chunk, size_t size_to_dev
 		else{
 			forks_num = MAX_NUM_FORKS;
 			num_of_pages_per_fork = size_to_devide/((MAX_NUM_FORKS-1)*getpagesize());
-
-			// num_of_pages_per_fork =size_to_devide/(MAX_NUM_FORKS* getpagesize());
 		}
 	}
 	int i;
@@ -233,14 +191,12 @@ int get_num_of_forks(off_t* offset_arr, size_t* len_of_chunk, size_t size_to_dev
 	{
 		offset_arr[i] = i*num_of_pages_per_fork*getpagesize();
 		len_of_chunk[i] = num_of_pages_per_fork*getpagesize();
-		//printf("offset_arr [%d] : %zd len_of_chunk [%d] : %lu\n",i,offset_arr[i],i ,len_of_chunk[i]);
+		//printf("offset_arr [%d] : %zd len_of_chunk [%d]:%lu\n",i,offset_arr[i],i ,len_of_chunk[i]);
 	}
 	len_of_chunk[forks_num-1] = size_to_devide - (forks_num-1)*num_of_pages_per_fork*getpagesize();
 	if (0 == len_of_chunk[forks_num-1])
 	{
 		forks_num--;
 	}
-	//printf("len_of_chunk[forks_num-1] : %lld\n",(long long) len_of_chunk[forks_num - 1]);
-	printf("forks_num : %d\n",forks_num );
 	return forks_num;
 }
