@@ -10,11 +10,10 @@
 #include <sys/types.h>
 #include <fcntl.h>
 
-#define size_tresh 1024
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define MAX_NUM_FORKS 16
 #define PREFFIX_PIPE "/tmp/counter__"
-#define FileNameLength 257 
+#define FileNameLength 256
 
 
 #define msg_invalid_cmd "Invalid input in command line\n"
@@ -173,22 +172,61 @@ size_t get_file_curr_size(char *file_name){ //TODO maybe RV should be ssize_t
 
 ///////////////////////////////////////////////////////////
 
+// int get_num_of_forks(off_t* offset_arr, size_t* len_of_chunk, size_t size_to_devide){
+// 	int forks_num;
+// 	int num_of_pages_per_fork;
+// 	if (0 == size_to_devide)
+// 	{
+// 		return 0;
+// 	}
+// 	if (size_to_devide < 2 * MAX_NUM_FORKS * getpagesize())
+// 	{
+// 		forks_num = size_to_devide / (2 * getpagesize()) + 1;
+// 		//printf("%d\n", forks_num);
+// 		num_of_pages_per_fork = 2;
+// 	}
+// 	else{
+// 		forks_num = MAX_NUM_FORKS;
+// 		num_of_pages_per_fork =size_to_devide/(MAX_NUM_FORKS* getpagesize());
+// 	}
+// 	int i;
+// 	for ( i = 0; i < forks_num; ++i)
+// 	{
+// 		offset_arr[i] = i*num_of_pages_per_fork*getpagesize();
+// 		len_of_chunk[i] = num_of_pages_per_fork*getpagesize();
+// 		//printf("offset_arr [%d] : %zd len_of_chunk [%d] : %lu\n",i,offset_arr[i],i ,len_of_chunk[i]);
+// 	}
+// 	len_of_chunk[forks_num-1] = size_to_devide - (forks_num-1)*num_of_pages_per_fork*getpagesize();
+// 	//printf("len_of_chunk[forks_num-1] : %lld\n",(long long) len_of_chunk[forks_num - 1]);
+// 	printf("forks_num : %d\n",forks_num );
+// 	return forks_num;
+// }
+///////////////////////////////////////////////////////////
 int get_num_of_forks(off_t* offset_arr, size_t* len_of_chunk, size_t size_to_devide){
 	int forks_num;
 	int num_of_pages_per_fork;
-	if (0 == size_to_devide)
+	// if (0 == size_to_devide)
+	// {
+	// 	return 0;
+	// }
+	if (size_to_devide <= 2 * getpagesize())
 	{
-		return 0;
-	}
-	if (size_to_devide < 2 * MAX_NUM_FORKS * getpagesize())
-	{
-		forks_num = size_to_devide / (2 * getpagesize()) + 1;
+		forks_num = 1;
 		//printf("%d\n", forks_num);
 		num_of_pages_per_fork = 2;
 	}
 	else{
-		forks_num = MAX_NUM_FORKS;
-		num_of_pages_per_fork =size_to_devide/(MAX_NUM_FORKS* getpagesize());
+		if (size_to_devide < MAX_NUM_FORKS * getpagesize())
+		{
+			forks_num = size_to_devide/getpagesize()+1;
+			num_of_pages_per_fork = 1;
+		}
+		else{
+			forks_num = MAX_NUM_FORKS;
+			num_of_pages_per_fork = size_to_devide/((MAX_NUM_FORKS-1)*getpagesize());
+
+			// num_of_pages_per_fork =size_to_devide/(MAX_NUM_FORKS* getpagesize());
+		}
 	}
 	int i;
 	for ( i = 0; i < forks_num; ++i)
@@ -198,7 +236,11 @@ int get_num_of_forks(off_t* offset_arr, size_t* len_of_chunk, size_t size_to_dev
 		//printf("offset_arr [%d] : %zd len_of_chunk [%d] : %lu\n",i,offset_arr[i],i ,len_of_chunk[i]);
 	}
 	len_of_chunk[forks_num-1] = size_to_devide - (forks_num-1)*num_of_pages_per_fork*getpagesize();
+	if (0 == len_of_chunk[forks_num-1])
+	{
+		forks_num--;
+	}
 	//printf("len_of_chunk[forks_num-1] : %lld\n",(long long) len_of_chunk[forks_num - 1]);
+	printf("forks_num : %d\n",forks_num );
 	return forks_num;
 }
-///////////////////////////////////////////////////////////

@@ -12,10 +12,8 @@
 #include <fcntl.h>
 
 #define msg_invalid_cmd "Invalid input in command line\n"
-#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
-#define bufSize 4096
 #define PREFFIX_PIPE "/tmp/counter__"
-#define FileNameLength 257 
+#define FileNameLength 256
 
 
 ///////////////////////////////////////////////////////////
