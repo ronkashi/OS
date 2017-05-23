@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <ctype.h>
 
 #define msg_invalid_cmd "Invalid input in command line\n"
 #define PREFFIX_PIPE "/tmp/counter__"

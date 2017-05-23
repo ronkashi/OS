@@ -37,6 +37,7 @@ static int flagSigHandler = RV_SUCCESS;
 //////////////////////decleration//////////////////////////
 int parse_first_arg(char* arg,char* ch);
 size_t get_file_curr_size(char *file_name);
+int get_num_of_forks(off_t* offset_arr, size_t* len_of_chunk, size_t size_to_devide);
 ///////////////////////////////////////////////////////////
 // The flow:
 // 1. Determine the file size – N. Decide K – the size of the chunk each Counter 
