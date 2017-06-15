@@ -61,10 +61,10 @@ int main(int argc, char *argv[])
     }
 
     // print socket details
-    if(0 > getsockname(sockfd,(struct sockaddr*) &my_addr,&addrsize)){
-        printf("Error : Could not get socket name. %s \n", strerror(errno));
-        return 1;
-    }
+    // if(0 > getsockname(sockfd,(struct sockaddr*) &my_addr,&addrsize)){
+    //     printf("Error : Could not get socket name. %s \n", strerror(errno));
+    //     return 1;
+    // }
     // printf("Client: socket created %s:%d\n",
     //      inet_ntoa((my_addr.sin_addr)),
     //      ntohs(my_addr.sin_port));
@@ -84,16 +84,16 @@ int main(int argc, char *argv[])
     }
 
     // print socket details again
-    if(0 > getsockname(sockfd, (struct sockaddr*) &my_addr,   &addrsize))
-    {
-        printf("Error : Could not get socket name. %s \n", strerror(errno));
-        return 1;
-    }
-    if(0 > getpeername(sockfd, (struct sockaddr*) &peer_addr, &addrsize))
-    {
-        printf("Error : Could not get socket name. %s \n", strerror(errno));
-        return 1;
-    }
+    // if(0 > getsockname(sockfd, (struct sockaddr*) &my_addr,   &addrsize))
+    // {
+    //     printf("Error : Could not get socket name. %s \n", strerror(errno));
+    //     return 1;
+    // }
+    // if(0 > getpeername(sockfd, (struct sockaddr*) &peer_addr, &addrsize))
+    // {
+    //     printf("Error : Could not get socket name. %s \n", strerror(errno));
+    //     return 1;
+    // }
 
     // printf("Client: Connected. \n"
     //      "\t\tSource IP: %s Source Port: %d\n"
@@ -111,6 +111,7 @@ int main(int argc, char *argv[])
         lenWR = write(sockfd, &(str_LEN[i]),20 - i);
         if (0 > lenWR) {
             printf("Error write to socket file: %s\n", strerror(errno));
+            close(sockfd);
             return -1;
         }
     }
@@ -125,6 +126,7 @@ int main(int argc, char *argv[])
         if (0 > lenRD) 
         {
             printf("Error reading from random file: %s\n", strerror(errno));
+            close(sockfd);
             return -1;
         }
         for (j = 0; j < lenRD; j+=lenWR)
@@ -132,6 +134,7 @@ int main(int argc, char *argv[])
             lenWR = write(sockfd, &(buffer[j]),lenRD - j);
             if (0 > lenWR) {
                 printf("Error write to socket file: %s\n", strerror(errno));
+                close(sockfd);
                 return -1;
             }
         }
@@ -161,6 +164,7 @@ int main(int argc, char *argv[])
         if (bytes_read < 0)
         {
             printf("Error reading from socket file: %s\n", strerror(errno));
+            close(sockfd);
             return -1;
         }
         if( bytes_read == 0 )
