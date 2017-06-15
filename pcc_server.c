@@ -28,8 +28,8 @@
 int NUM_OF_THREADS_OPENED = 0;
 int GLOBAL_BYTES_READ = 0;
 int GLOBAL_PRINTABLE_CHARS[NUM_OF_PRINTABLE_CHARS] = {0};
-int GLOBAL_PROCESS_OPENED = 0;
-int GLOBAL_PROCESS_FINISHED_SUCCESFULLY = 0;
+int GLOBAL_PROCESS_ACTIVE = 0;
+//int GLOBAL_PROCESS_FINISHED_SUCCESFULLY = 0;
 int GLOBAL_PROCESS_FINISHED_FAIL = 0;
 int listenfd  = -1;
 pthread_mutex_t  lock;
@@ -56,10 +56,13 @@ void my_signal_handler( int signum, siginfo_t* info,void* ptr)
     close(listenfd);
     //sleep (3);
     // free(threads);
-    while (GLOBAL_PROCESS_FINISHED_SUCCESFULLY + GLOBAL_PROCESS_FINISHED_FAIL < GLOBAL_PROCESS_OPENED){
+    int i = 0;
+    while (0 < GLOBAL_PROCESS_ACTIVE && i < 5){
+        printf("need to sleep %d\n",__LINE__ );
         sleep(1);
+        i++;
     }
-    if (GLOBAL_PROCESS_FINISHED_SUCCESFULLY < GLOBAL_PROCESS_OPENED)
+    if (0 < GLOBAL_PROCESS_FINISHED_FAIL)
     {
         printf("\nAn error been occured!!\n");
     }
@@ -68,9 +71,24 @@ void my_signal_handler( int signum, siginfo_t* info,void* ptr)
         int i = 0;
         printf("The number of bytes that read by the server is : %d\n",GLOBAL_BYTES_READ );
         printf("we saw \n");
+       
+        rc = pthread_mutex_lock(&lock);
+        if( 0 != rc ) 
+        {
+            printf( "ERROR in pthread_mutex_lock(): %s\n", strerror( rc ) );
+            exit(-1);
+        }
+
         for (i = 0; i < NUM_OF_PRINTABLE_CHARS; ++i)
         {
             printf("%d '%c's,\t",GLOBAL_PRINTABLE_CHARS[i],(i+32) );
+        }
+
+        rc = pthread_mutex_unlock(&lock);
+        if( 0 != rc ) 
+        {
+            printf( "ERROR in pthread_mutex_unlock(): %s\n", strerror( rc ) );
+            exit(-1);
         }
         printf("\n");
     }
@@ -166,7 +184,7 @@ void* counter(void *t)
         return NULL;
     }
     //TODO check if the pthread_exit
-    __sync_fetch_and_add(&GLOBAL_PROCESS_FINISHED_SUCCESFULLY, 1);
+    __sync_fetch_and_add(&GLOBAL_PROCESS_ACTIVE, -1); // decrement
 
     pthread_exit((void *)0);
 }
@@ -255,7 +273,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            GLOBAL_PROCESS_OPENED++;
+            __sync_fetch_and_add(&GLOBAL_PROCESS_ACTIVE, 1); //increment
         }
 
         // getsockname(connfd, (struct sockaddr*) &my_addr,   &addrsize);
