@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
     struct sockaddr_in peer_addr;
     socklen_t addrsize = sizeof(struct sockaddr_in );
 
-    memset(recv_buff, '\0',sizeof(recv_buff));
+    memset(recv_buff, '\0', sizeof(recv_buff));
     if( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         printf("Error : Could not create socket \n");
@@ -140,6 +140,7 @@ int main(int argc, char *argv[])
         }
         //printf("iteration num %d\n",i );
     }
+    close(fdInput);
     // printf("sizeof('') === %ld\n", sizeof('\0'));
     // char end = -1;
     // printf("EOF is %d\n",EOF );
@@ -155,12 +156,14 @@ int main(int argc, char *argv[])
     // read data from server into recv_buff
     // block until there's something to read
     // print data to screen every time
+    int already_read = 0;
     while( 1 )
     {
         //printf("RKKKK1\n");
         bytes_read = read(sockfd,
-                          recv_buff,
+                          &(recv_buff[already_read]),
                           sizeof(recv_buff) - 1);
+        already_read +=bytes_read;
         if (bytes_read < 0)
         {
             printf("Error reading from socket file: %s\n", strerror(errno));
@@ -168,10 +171,9 @@ int main(int argc, char *argv[])
             return -1;
         }
         if( bytes_read == 0 )
-            printf("I read enough\n");
             break;
     }
-    recv_buff[bytes_read] = '\0';
+    recv_buff[already_read] = '\0';
     printf("num of letters that read by the server is : %s\n",recv_buff );
 
     close(sockfd); // is socket really done here? yes
