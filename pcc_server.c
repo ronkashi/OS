@@ -78,7 +78,6 @@ void my_signal_handler( int signum, siginfo_t* info,void* ptr)
 void* counter(void *t)
 {
     int fd = *((int *) t);
-    printf("my fd is : %d\n", fd);
     char buffer[BUFF_SIZE];
     int local_printable_chars[NUM_OF_PRINTABLE_CHARS] = {0};
     int local_bytes_read = 0;
@@ -131,7 +130,6 @@ void* counter(void *t)
             return NULL;
         }
     }
-    //TODO close connection
     free(t);
     close(fd);
 
