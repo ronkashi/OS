@@ -12,7 +12,7 @@
 int main(int argc, char const *argv[])
 {
     int file_desc, ret_val,ch_num;
-    char buff [129];
+
     file_desc = open("/dev/"DEVICE_FILE_NAME, 0);
     if (file_desc < 0) {
         printf ("Can't open device file: %s\n", DEVICE_FILE_NAME);
@@ -33,17 +33,16 @@ int main(int argc, char const *argv[])
     }
 
     /////read /// 
-    ret_val = read(file_desc,buff,128);
+    ret_val = write(file_desc,argv[2],strlen(argv[2]));
+
     if (ret_val < 0) {
          printf ("write to file failed:%d\n", ret_val);
          exit(-1);
     }
-    buff[ret_val] = '\0';
 
-    close(file_desc);
-
+    close(file_desc); 
     printf("~~~~status message~~~~~~~\n");
-    printf("the message : %s\n was read fron : %d slot",buff,ch_num);
-    printf("the length that read is : %d\n",ret_val );
+    printf("the message : %s\n was write into : %d slot",argv[2],ch_num);
+    printf("the length that wrote is : %d\n",ret_val );
     return 0;
 }
