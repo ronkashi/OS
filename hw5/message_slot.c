@@ -29,13 +29,13 @@ struct chardev_info{
     spinlock_t lock;
 };
 
-
-/////////////////////LINKED LIST////////////////////////
 typedef struct message_slot{
     char buffers[NUM_OF_INT_BUF][LEN_OF_INT_BUF];
     int ch_num;
     int slot_index;
 }message_slot_t;
+
+/////////////////////LINKED LIST////////////////////////
 
 typedef struct node {
     struct message_slot data;
@@ -43,21 +43,18 @@ typedef struct node {
 }node_t;
 
 
-void push(node_t * head, message_slot_t data) {
-    node_t * curr = head;
-    while (curr->next != NULL) {
-        curr = curr->next;
-    }
+void push(node_t ** head, message_slot_t data) {
+    node_t * curr;
 
-    /* now we can add a new variable */
-    curr->next = kmalloc(sizeof(node_t),GFP_KERNEL);
-    if (NULL == curr->next)
+    curr = kmalloc(sizeof(node_t),GFP_KERNEL);
+    if (NULL == curr)
     {
         //TODO error
         printk("kmalloc failed in line : %d",__LINE__);
     }
-    curr->next->data = data;
-    curr->next->next = NULL;
+    curr->data = data;
+    curr->next = *head;
+    *head = curr;
 }
 
 node_t* get_node_by_slot_index(node_t * head, int index){
@@ -73,6 +70,11 @@ node_t* get_node_by_slot_index(node_t * head, int index){
 
 void print_list(node_t * head) {
     node_t * curr = head;
+    if (curr == NULL)
+    {
+        printk("the list is EMPTY\n");
+        return;
+    }
     while (curr != NULL) {
         int i=0;
         printk("the slot_index is : %d\n",curr->data.slot_index );
@@ -108,6 +110,11 @@ int remove_by_index(node_t ** head, int n) {
     int retval = -1;
     node_t * curr = *head;
     node_t * temp_node = NULL;
+    
+    if (curr == NULL)
+    {
+        return retval;
+    }
 
     if (curr->data.slot_index == n) {
         return pop(head);
@@ -139,7 +146,7 @@ static unsigned long flags; // for spinlock
 /* process attempts to open the device file */
 static int device_open(struct inode *inode, struct file *file)
 {
-    printk("device_open(%p)\n", file);
+    printk("device_open (%p)\n", file);
 
     /* 
      * We don't want to talk to two processes at the same time 
@@ -161,8 +168,8 @@ static int device_open(struct inode *inode, struct file *file)
         msg.ch_num = -1;
         msg.slot_index = file->f_inode->i_ino;
 
-        push(head,msg);
-        printk("device_open(%p)\n", file);
+        push(&head,msg);
+        printk("device_opened (%p)\n", file);
     }
     else
     {
@@ -360,8 +367,12 @@ static void __exit simple_cleanup(void)
      * should always succeed (didnt used to in older kernel versions)
      */
 
-    //TODO spin_lock_init remove
+    spin_lock_irqsave(&device_info.lock, flags);
     destroy_list(&head);
+    spin_unlock_irqrestore(&device_info.lock, flags);
+    
+    //TODO spin_lock_init remove
+    
     unregister_chrdev(MAJOR_NUM, DEVICE_RANGE_NAME);
 }
 

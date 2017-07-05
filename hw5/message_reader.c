@@ -31,26 +31,46 @@ typedef struct node {
 }node_t;
 
 
-void push(node_t * head, message_slot_t data) {
-    node_t * curr = head;
-    while (curr->next != NULL) {
-        curr = curr->next;
-    }
+void push(node_t ** head, message_slot_t data) {
+    // node_t * curr = head;
+    // while (curr != NULL) {
+    //     curr = curr->next;
+    // }
 
-    /* now we can add a new variable */
-    curr->next = malloc(sizeof(node_t));
-    if (NULL == curr->next)
+    // /* now we can add a new variable */
+    // curr = malloc(sizeof(node_t));
+    // if (NULL == curr)
+    // {
+    //     //TODO error
+    //     printf("kmalloc failed in line : %d",__LINE__);
+    // }
+    // curr->data = data;
+    // curr->next = NULL;
+
+    node_t * curr = malloc(sizeof(node_t));
+    if (NULL == curr)
     {
         //TODO error
         printf("kmalloc failed in line : %d",__LINE__);
     }
-    curr->next->data = data;
-    curr->next->next = NULL;
+    curr->data = data;
+    curr->next = *head;
+    printf("%d\n",__LINE__ );
+    *head = curr;
+    if (*head == NULL)
+    {
+        printf("%d\n",__LINE__ );
+    }
+    printf("%d\n",__LINE__ );
 }
 
 void print_list(node_t * head) {
     node_t * curr = head;
-
+    if (curr == NULL)
+    {
+        printf("the list is EMPTY\n");
+        return;
+    }
     while (curr != NULL) {
         int i=0;
         printf("the slot_index is : %d\n",curr->data.slot_index );
@@ -83,8 +103,13 @@ int remove_by_index(node_t ** head, int n) {
     int retval = -1;
     node_t * curr = *head;
     node_t * temp_node = NULL;
+    
     printf("%d\n",__LINE__ );
-
+    if (curr == NULL)
+    {
+        printf("%d\n",__LINE__ );
+        return retval;
+    }
     if (curr->data.slot_index == n) {
         return pop(head);
     }
@@ -115,36 +140,40 @@ node_t* get_node_by_slot_index(node_t * head, int index){
 }
 
 
-
-
 int destroy_list(node_t ** head){
     while (pop(head) != -1);
-    //free(head);
+    //return 1;
 }
 
 
 int main(int argc, char const *argv[])
 {
 
-    node_t * test_list = malloc(sizeof(node_t));
-    printf("%d\n",__LINE__ );
-    test_list->data.slot_index = 1;
-    test_list->next = malloc(sizeof(node_t));
-    test_list->next->data.slot_index = 2;
-    test_list->next->next = malloc(sizeof(node_t));
-    test_list->next->next->data.slot_index = 3;
-    test_list->next->next->next = malloc(sizeof(node_t));
-    test_list->next->next->next->data.slot_index = 4;
-    test_list->next->next->next->next = NULL;
+    node_t * test_list = NULL;// = malloc(sizeof(node_t));
+    //printf ("the rc is: %d \n",destroy_list(&test_list));
+    // printf("%d\n",__LINE__ );
+    // test_list->data.slot_index = 1;
+    // test_list->next = malloc(sizeof(node_t));
+    // test_list->next->data.slot_index = 2;
+    // test_list->next->next = malloc(sizeof(node_t));
+    // test_list->next->next->data.slot_index = 3;
+    // test_list->next->next->next = malloc(sizeof(node_t));
+    // test_list->next->next->next->data.slot_index = 4;
+    // test_list->next->next->next->next = NULL;
 
     message_slot_t data;
     int i;
-    for (i = 0; i < 0; ++i)
+    for (i = 0; i < 3; ++i)
     {
         data.slot_index = 80*i;
         // data.buffers = {{"dssfdds"}, {"dsdsa"}, {"gfg"}, {"fgdsgfds"}};
-        push(test_list,data);
+        push(&test_list,data);
     }
+    if (test_list == NULL)
+    {
+        printf("%d\n",__LINE__ );
+    }
+    print_list(test_list);
     printf("%d\n",__LINE__ );
     remove_by_index(&test_list, 720);
     printf("%d\n",__LINE__ );
@@ -153,9 +182,13 @@ int main(int argc, char const *argv[])
     remove_by_index(&test_list, 3);
     remove_by_index(&test_list, 880);
     printf("%d\n",__LINE__ );
-    printf("the num : %d\n",get_node_by_slot_index(test_list,4)->data.slot_index);
+    node_t * mynode = get_node_by_slot_index(test_list,80);
+    if (NULL != mynode)
+    {
+        /* code */
+        printf("the num : %d\n",mynode->data.slot_index);
+    }
 
-    //destroy_list(&test_list);
     print_list(test_list);
     printf("%d\n",__LINE__ );
     return 0;
