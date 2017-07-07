@@ -13,17 +13,20 @@ int main(int argc, char const *argv[])
 {
     int file_desc, ret_val,ch_num;
     char buff [129];
-    file_desc = open("/dev/"DEVICE_FILE_NAME, 0);
-    if (file_desc < 0) {
-        printf ("Can't open device file: %s\n", DEVICE_FILE_NAME);
-        exit(-1);
-    }
+    
     ch_num = atoi(argv[1]);
     if (ch_num < -1 || ch_num > 4)
     {
         printf("the input %s is invalid pls enter 0 or 1 or 2 or 3\n",argv[1] );
         exit(-1);
     }
+
+    file_desc = open("/dev/"DEVICE_FILE_NAME, O_RDWR);
+    if (file_desc < 0) {
+        printf ("Can't open device file: %s\n", DEVICE_FILE_NAME);
+        exit(-1);
+    }
+
 
     ret_val = ioctl(file_desc, IOCTL_SET_CH, ch_num);
 
@@ -35,7 +38,7 @@ int main(int argc, char const *argv[])
     /////read /// 
     ret_val = read(file_desc,buff,128);
     if (ret_val < 0) {
-         printf ("write to file failed:%d\n", ret_val);
+         printf ("read from file failed:%d\n", ret_val);
          exit(-1);
     }
     buff[ret_val] = '\0';

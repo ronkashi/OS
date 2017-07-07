@@ -186,14 +186,15 @@ static int device_release(struct inode *inode, struct file *file)
     printk("device_release(%p,%p)\n", inode, file);
 
     /* ready for our next caller */
-    spin_lock_irqsave(&device_info.lock, flags);
+    // spin_lock_irqsave(&device_info.lock, flags);
     
-    if(-1 == remove_by_index(&head, file->f_inode->i_ino)){
-        printk("device already release \n");
-        spin_unlock_irqrestore(&device_info.lock, flags);
-        return -1;
-    }
-    spin_unlock_irqrestore(&device_info.lock, flags);
+
+    // if(-1 == remove_by_index(&head, file->f_inode->i_ino)){
+    //     printk("device already release \n");
+    //     spin_unlock_irqrestore(&device_info.lock, flags);
+    //     return -1;
+    // }
+    // spin_unlock_irqrestore(&device_info.lock, flags);
 
     return SUCCESS;
 }
@@ -215,7 +216,7 @@ static ssize_t device_read(struct file *file, /* see include/linux/fs.h   */
     spin_lock_irqsave(&device_info.lock, flags);
     
     curr_node = get_node_by_slot_index(head,file->f_inode->i_ino);
-    printk("device_read(%p,%ld)\n", file, length);
+    printk("device_read(%p,%d)\n", file, length);
     if (NULL == curr_node)
     {
         //TODO errno
@@ -253,7 +254,7 @@ static ssize_t device_write(struct file *file,
     }
     spin_lock_irqsave(&device_info.lock, flags);
     curr_node = get_node_by_slot_index(head,file->f_inode->i_ino);
-    printk("device_write(%p,%ld)\n", file, length);
+    printk("device_write(%p,%d)\n", file, length);
     
     if (NULL == curr_node)
     {
@@ -352,7 +353,7 @@ static int __init simple_init(void)
     printk("Registeration is a success. The major device number is %d.\n", MAJOR_NUM);
     printk("If you want to talk to the device driver,\n");
     printk("you have to create a device file:\n");
-    printk("mknod /dev/%s c %d 0\n", DEVICE_FILE_NAME, MAJOR_NUM);
+    printk("mknod %s c %d 0\n", DEVICE_FILE_NAME, MAJOR_NUM);
     printk("You can echo/cat to/from the device file.\n");
     printk("Dont forget to rm the device file and rmmod when you're done\n");
 
@@ -374,6 +375,8 @@ static void __exit simple_cleanup(void)
     //TODO spin_lock_init remove
     
     unregister_chrdev(MAJOR_NUM, DEVICE_RANGE_NAME);
+
+    printk("UnRegisteration is a success. The major device number was %d.\n", MAJOR_NUM);
 }
 
 module_init(simple_init);
