@@ -13,7 +13,7 @@ int main(int argc, char const *argv[])
 {
     int file_desc, ret_val,ch_num;
 
-    file_desc = open("/dev/"DEVICE_FILE_NAME, 0);
+    file_desc = open("/dev/"DEVICE_FILE_NAME, WR_ONLY);
     if (file_desc < 0) {
         printf ("Can't open device file: %s\n", DEVICE_FILE_NAME);
         exit(-1);
