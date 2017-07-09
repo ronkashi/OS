@@ -16,7 +16,8 @@ int main(int argc, char const *argv[])
     if(argc != 3){
         printf("Invalid parameters.\n");
         printf("Please enter 1st arg : number of ch to write in\n");
-        printf("Please enter 2nd arg : message to write \n")
+        printf("Please enter 2nd arg : message to write \n");
+        return 0;
     }
     ch_num = atoi(argv[1]);
     if (ch_num < 0 || ch_num > 3)
