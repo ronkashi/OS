@@ -75,8 +75,8 @@ void print_list(node_t * head) {
         printk("the list is EMPTY\n");
         return;
     }
+    int i=0;
     while (curr != NULL) {
-        int i=0;
         printk("the slot_index is : %d\n",curr->data.slot_index );
         for (i = 0; i < NUM_OF_INT_BUF; ++i)
         {
