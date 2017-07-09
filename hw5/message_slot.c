@@ -106,31 +106,31 @@ void destroy_list(node_t ** head){
     while (pop(head) != -1);
 }
 
-int remove_by_index(node_t ** head, int n) {
-    int retval = -1;
-    node_t * curr = *head;
-    node_t * temp_node = NULL;
+// int remove_by_index(node_t ** head, int n) {
+//     int retval = -1;
+//     node_t * curr = *head;
+//     node_t * temp_node = NULL;
     
-    if (curr == NULL)
-    {
-        return retval;
-    }
+//     if (curr == NULL)
+//     {
+//         return retval;
+//     }
 
-    if (curr->data.slot_index == n) {
-        return pop(head);
-    }
+//     if (curr->data.slot_index == n) {
+//         return pop(head);
+//     }
 
-    for (; NULL != curr->next; curr = curr->next) {
-        if (curr->next->data.slot_index == n) {
-            temp_node = curr->next;
-            retval = 0;
-            curr->next = temp_node->next;
-            kfree(temp_node);
-            break;
-        }
-    }
-    return retval;
-}
+//     for (; NULL != curr->next; curr = curr->next) {
+//         if (curr->next->data.slot_index == n) {
+//             temp_node = curr->next;
+//             retval = 0;
+//             curr->next = temp_node->next;
+//             kfree(temp_node);
+//             break;
+//         }
+//     }
+//     return retval;
+// }
 /////////////////////LINKED LIST////////////////////////
 
 static node_t* head = NULL;
