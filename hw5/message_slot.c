@@ -231,10 +231,12 @@ static ssize_t device_read(struct file *file, /* see include/linux/fs.h   */
         return -1;
     }
 
-
     for (i = 0; i < MIN(LEN_OF_INT_BUF,length); i++)
     {
-        put_user(curr_node->data.buffers[curr_node->data.ch_num][i], buffer + i);
+        if(0 > put_user(curr_node->data.buffers[curr_node->data.ch_num][i], buffer + i)){
+            printk("message_slot, device_read : the buffer from the user is invalid\n");
+            return -1;
+        }
     }
     spin_unlock_irqrestore(&device_info.lock, flags);
 
@@ -274,7 +276,10 @@ static ssize_t device_write(struct file *file,
     {
         if (i < length)
         {
-            get_user(curr_node->data.buffers[curr_node->data.ch_num][i], buffer + i);
+            if(0 > get_user(curr_node->data.buffers[curr_node->data.ch_num][i], buffer + i)){
+                printk("message_slot, device_write : the buffer from the user is invalid\n");
+                return -1;
+            }
         }
         else
         {
