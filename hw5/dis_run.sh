@@ -1,3 +1,4 @@
 sudo rmmod message_slot.ko
 
-sudo rm -rf /dev/message_slot
+sudo rm /dev/simple_message_slot_1
+sudo rm /dev/simple_message_slot_2
