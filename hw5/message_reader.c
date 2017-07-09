@@ -15,13 +15,15 @@ int main(int argc, char const *argv[])
     char buff [129];
     
     ch_num = atoi(argv[1]);
-    if (ch_num < -1 || ch_num > 4)
+    if (ch_num < 0 || ch_num > 3)
     {
         printf("the input %s is invalid pls enter 0 or 1 or 2 or 3\n",argv[1] );
         exit(-1);
     }
 
-    file_desc = open("/dev/"DEVICE_FILE_NAME, O_RDWR);
+    // file_desc = open("/dev/"DEVICE_FILE_NAME, O_RDWR);
+    file_desc = open(argv[2], O_RDWR);
+    
     if (file_desc < 0) {
         printf ("Can't open device file: %s\n", DEVICE_FILE_NAME);
         exit(-1);
@@ -46,7 +48,8 @@ int main(int argc, char const *argv[])
     close(file_desc);
 
     printf("~~~~status message~~~~~~~\n");
-    printf("the message : %s\n was read fron : %d slot",buff,ch_num);
+    printf("the message : %s\n was read fron : %d slot\n",buff,ch_num);
     printf("the length that read is : %d\n",ret_val );
+    printf("~~~~end status message~~~~~~~\n");
     return 0;
 }

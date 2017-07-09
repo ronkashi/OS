@@ -313,6 +313,18 @@ static long device_ioctl( //struct inode*  inode,
             return -1;
         }
     }
+
+    ///////////
+    if (IOCTL_SET_CH == ioctl_num)
+    {
+        printk("message_slot, %s: something bad occuored in line : %d\n",__FUNCTION__,__LINE__);
+    }
+    if (ioctl_param < 4)
+    {
+        printk("message_slot, %s: something bad occuored in line : %d\n",__FUNCTION__,__LINE__);
+    }
+    ///////////
+    printk("message_slot, %s: something bad occuored in line : %d\n",__FUNCTION__,__LINE__);
     return -EINVAL;
 }
 

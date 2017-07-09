@@ -15,13 +15,14 @@ int main(int argc, char const *argv[])
     int file_desc, ret_val,ch_num;
 
     ch_num = atoi(argv[1]);
-    if (ch_num < -1 || ch_num > 4)
+    if (ch_num < 0 || ch_num > 3)
     {
         printf("the input %s is invalid pls enter 0 or 1 or 2 or 3\n",argv[1] );
         exit(-1);
     }
 
-    file_desc = open("/dev/"DEVICE_FILE_NAME, O_RDWR);
+    //file_desc = open("/dev/"DEVICE_FILE_NAME, O_RDWR);
+    file_desc = open(argv[3], O_RDWR);
 
 
     if (file_desc < 0) {
@@ -47,7 +48,8 @@ int main(int argc, char const *argv[])
 
     close(file_desc); 
     printf("~~~~status message~~~~~~~\n");
-    printf("the message : %s\n was write into : %d slot",argv[2],ch_num);
+    printf("the message : %s\n was write into : %d slot\n",argv[2],ch_num);
     printf("the length that wrote is : %d\n",ret_val );
+    printf("~~~~end status message~~~~~~~\n");
     return 0;
 }
