@@ -13,7 +13,7 @@ int main(int argc, char const *argv[])
 {
     int file_desc, ret_val,ch_num;
     char buff [BUFF_SIZE + 1];
-    if(argc != 2){
+    if(argc != 3){
         printf("Invalid parameters.\n");
         printf("Please enter 1st arg : number of ch to read from\n");
         return 0;
@@ -25,7 +25,7 @@ int main(int argc, char const *argv[])
         exit(-1);
     }
 
-    file_desc = open("/dev/"DEVICE_FILE_NAME, O_RDWR);
+    file_desc = open(argv[2], O_RDWR);
     if (file_desc < 0) {
         printf ("Can't open device file: %s\n", DEVICE_FILE_NAME);
         exit(-1);
@@ -56,7 +56,7 @@ int main(int argc, char const *argv[])
     }
 
     printf("~~~~~~~~status message reader~~~~~~~\n");
-    printf("the message : %s\n was read fron : %d slot\n",buff,ch_num);
+    printf("the message : %s\n was read fron : %d slot",buff,ch_num);
     printf("the length that read is : %d\n",ret_val );
     printf("~~~~end status message reader~~~~~~~\n");
     return 0;

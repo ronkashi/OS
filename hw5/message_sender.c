@@ -1,6 +1,5 @@
 #include "message_slot.h"    
 
-/* ***** Example w/ minimal error handling - for ease of reading ***** */
 
 #include <fcntl.h>      /* open */ 
 #include <unistd.h>     /* exit */
@@ -38,22 +37,27 @@ int main(int argc, char const *argv[])
     ret_val = ioctl(file_desc, IOCTL_SET_CH, ch_num);
 
     if (ret_val < 0) {
-         printf ("ioctl_set_channel failed:%d\n", ret_val);
-         exit(-1);
+        printf ("ioctl_set_channel failed:%d\n", ret_val);
+        exit(-1);
     }
 
     /////read /// 
     ret_val = write(file_desc,argv[2],strlen(argv[2]));
 
     if (ret_val < 0) {
-         printf ("write to file failed: %d. %s\n", ret_val,strerror(errno));
-         exit(-1);
+        printf ("write to file failed: %d. %s\n", ret_val,strerror(errno));
+        exit(-1);
     }
 
-    close(file_desc); 
-    printf("~~~~~~~~status message~~~~~~~\n");
-    printf("the message : %s\n was write into : %d slot",argv[2],ch_num);
+
+    if (close(file_desc) < 0) {
+        printf ("close file failed:%d\n", ret_val);
+        close(file_desc);
+        exit(-1);
+    }
+    printf("~~~~~~~~status message sender~~~~~~~\n");
+    printf("the message : %s\n was write into : %d slot\n",argv[2],ch_num);
     printf("the length that wrote is : %d\n",ret_val );
-    printf("~~~~end status message~~~~~~~\n");
+    printf("~~~~end status message sender~~~~~~~\n");
     return 0;
 }
