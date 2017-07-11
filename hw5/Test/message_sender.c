@@ -52,11 +52,10 @@ int main(int argc, char const *argv[])
 
     if (close(file_desc) < 0) {
         printf ("close file failed:%d\n", ret_val);
-        close(file_desc);
         exit(-1);
     }
     printf("~~~~~~~~status message sender~~~~~~~\n");
-    printf("the message : %s\n was write into : %d slot",argv[2],ch_num);
+    printf("the message : %s\n was write into : %d slot\n",argv[2],ch_num);
     printf("the length that wrote is : %d\n",ret_val );
     printf("~~~~end status message sender~~~~~~~\n");
     return 0;

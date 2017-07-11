@@ -43,18 +43,19 @@ typedef struct node {
 }node_t;
 
 
-void push(node_t ** head, message_slot_t data) {
+int push(node_t ** head, message_slot_t data) {
     node_t * curr;
 
     curr = kmalloc(sizeof(node_t),GFP_KERNEL);
     if (NULL == curr)
     {
-        //TODO error
         printk("kmalloc failed in line : %d",__LINE__);
+        return -1;
     }
     curr->data = data;
     curr->next = *head;
     *head = curr;
+    return SUCCESS;
 }
 
 node_t* get_node_by_slot_index(node_t * head, int index){
@@ -68,23 +69,23 @@ node_t* get_node_by_slot_index(node_t * head, int index){
     return NULL;
 }
 
-void print_list(node_t * head) {
-    node_t * curr = head;
-    int i=0;
-    if (curr == NULL)
-    {
-        printk("the list is EMPTY\n");
-        return;
-    }
-    while (curr != NULL) {
-        printk("the slot_index is : %d\n",curr->data.slot_index );
-        for (i = 0; i < NUM_OF_INT_BUF; ++i)
-        {
-            printk("message slot num: %d the message: \"%s\"\n",i, (curr->data).buffers[i]);
-        }
-        curr = curr->next;
-    }
-}
+// void print_list(node_t * head) {
+//     node_t * curr = head;
+//     int i=0;
+//     if (curr == NULL)
+//     {
+//         printk("the list is EMPTY\n");
+//         return;
+//     }
+//     while (curr != NULL) {
+//         printk("the slot_index is : %d\n",curr->data.slot_index );
+//         for (i = 0; i < NUM_OF_INT_BUF; ++i)
+//         {
+//             printk("message slot num: %d the message: \"%s\"\n",i, (curr->data).buffers[i]);
+//         }
+//         curr = curr->next;
+//     }
+// }
 
 int pop(node_t ** head) {
     int retval = -1;
@@ -106,31 +107,31 @@ void destroy_list(node_t ** head){
     while (pop(head) != -1);
 }
 
-int remove_by_index(node_t ** head, int n) {
-    int retval = -1;
-    node_t * curr = *head;
-    node_t * temp_node = NULL;
+// int remove_by_index(node_t ** head, int n) {
+//     int retval = -1;
+//     node_t * curr = *head;
+//     node_t * temp_node = NULL;
     
-    if (curr == NULL)
-    {
-        return retval;
-    }
+//     if (curr == NULL)
+//     {
+//         return retval;
+//     }
 
-    if (curr->data.slot_index == n) {
-        return pop(head);
-    }
+//     if (curr->data.slot_index == n) {
+//         return pop(head);
+//     }
 
-    for (; NULL != curr->next; curr = curr->next) {
-        if (curr->next->data.slot_index == n) {
-            temp_node = curr->next;
-            retval = 0;
-            curr->next = temp_node->next;
-            kfree(temp_node);
-            break;
-        }
-    }
-    return retval;
-}
+//     for (; NULL != curr->next; curr = curr->next) {
+//         if (curr->next->data.slot_index == n) {
+//             temp_node = curr->next;
+//             retval = 0;
+//             curr->next = temp_node->next;
+//             kfree(temp_node);
+//             break;
+//         }
+//     }
+//     return retval;
+// }
 /////////////////////LINKED LIST////////////////////////
 
 static node_t* head = NULL;
@@ -156,15 +157,17 @@ static int device_open(struct inode *inode, struct file *file)
     if (NULL == get_node_by_slot_index(head,file->f_inode->i_ino))
     {
         message_slot_t msg;
-        int i;
-        for (i = 0; i < NUM_OF_INT_BUF; ++i)
-        {
-            msg.buffers[i][0] = '\0';
-        }
+        // int i;
+        // for (i = 0; i < NUM_OF_INT_BUF; ++i)
+        // {
+        //     msg.buffers[i][0] = '\0';
+        // }
         msg.ch_num = -1;
         msg.slot_index = file->f_inode->i_ino;
 
-        push(&head,msg);
+        if (0 > push(&head,msg)){
+            return -1;
+        }
         printk("device_opened (%p)\n", file);
     }
     else
@@ -215,7 +218,6 @@ static ssize_t device_read(struct file *file, /* see include/linux/fs.h   */
     printk("device_read(%p,%d)\n", file, length);
     if (NULL == curr_node)
     {
-        //TODO errno
         printk("the file not exist in the list");
         spin_unlock_irqrestore(&device_info.lock, flags);
         return -1;
@@ -256,7 +258,6 @@ static ssize_t device_write(struct file *file,
     
     if (NULL == curr_node)
     {
-        //TODO
         printk("the file not exist in the list\n");
         spin_unlock_irqrestore(&device_info.lock, flags);
         return -1;
@@ -308,7 +309,6 @@ static long device_ioctl( //struct inode*  inode,
         }
         else
         {
-            //TODO
             printk("the file not exist in the list");
             spin_unlock_irqrestore(&device_info.lock, flags);
             return -1;
@@ -372,9 +372,7 @@ static void __exit simple_cleanup(void)
     spin_lock_irqsave(&device_info.lock, flags);
     destroy_list(&head);
     spin_unlock_irqrestore(&device_info.lock, flags);
-    
-    //TODO spin_lock_init remove
-    
+        
     unregister_chrdev(MAJOR_NUM, DEVICE_RANGE_NAME);
 
     printk("UnRegisteration is a success. The major device number was %d.\n", MAJOR_NUM);

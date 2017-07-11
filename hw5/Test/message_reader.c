@@ -51,12 +51,11 @@ int main(int argc, char const *argv[])
 
     if (close(file_desc) < 0) {
         printf ("close file failed:%d\n", ret_val);
-        close(file_desc);
         exit(-1);
     }
 
     printf("~~~~~~~~status message reader~~~~~~~\n");
-    printf("the message : %s\n was read fron : %d slot",buff,ch_num);
+    printf("the message : %s\n was read fron : %d slot\n",buff,ch_num);
     printf("the length that read is : %d\n",ret_val );
     printf("~~~~end status message reader~~~~~~~\n");
     return 0;
